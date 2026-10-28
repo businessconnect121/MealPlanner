@@ -1,0 +1,8 @@
+{
+  "name": "nutrilens",
+  "private": true,
+  "description": "NutriLens with Meal Planner. The only dependency is Netlify's own storage library, used by the shared-favourites function.",
+  "dependencies": {
+    "@netlify/blobs": "11.1.4"
+  }
+}

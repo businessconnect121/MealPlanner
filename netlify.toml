@@ -1,0 +1,9 @@
+[build]
+  publish = "."
+
+[build.environment]
+  # @netlify/blobs (shared favourites) needs Node 22.12 or newer
+  NODE_VERSION = "22"
+
+[functions]
+  directory = "netlify/functions"
