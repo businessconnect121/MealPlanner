@@ -11,11 +11,13 @@ const json = (status, obj) => new Response(JSON.stringify(obj), {
 const digest = s => createHash("sha256").update(String(s)).digest();
 
 export default async (req) => {
-  const secret = process.env.MEAL_PLANNER_PASSCODE;
+  const env = name => { try { const v = globalThis.Netlify?.env?.get(name); if (v) return v; } catch {} return process.env[name]; };
+  const secret = (env("MEAL_PLANNER_PASSCODE") || "").trim();
   if (!secret) return json(503, { error: "not_set_up" });
   const given = req.headers.get("x-family-passcode") || "";
   if (!timingSafeEqual(digest(given), digest(secret))) return json(401, { error: "wrong_passcode" });
 
+  try {
   const store = getStore({ name: "meal-master", consistency: "strong" });
 
   if (req.method === "GET") {
@@ -34,5 +36,6 @@ export default async (req) => {
     return json(200, { ok: true, savedAt: doc.savedAt });
   }
   return json(405, { error: "method" });
+  } catch (e) { return json(500, { error: "store_error", detail: String(e && e.message || e).slice(0, 200) }); }
 };
 

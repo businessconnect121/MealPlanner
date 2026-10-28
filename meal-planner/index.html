@@ -1999,7 +1999,8 @@ function base(){ try{ return JSON.parse(lsGet(BASEKEY)||'null'); }catch(e){ retu
 async function api(method,body){
   const r=await fetch(SYNC.url,{method,cache:'no-store',headers:{'x-family-passcode':passcode(),...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
   let j=null; try{ j=await r.json(); }catch(e){} return {status:r.status,j}; }
-const FAIL={401:'wrongpass',503:'notsetup',404:'nofunc',413:'toolarge'};
+const FAIL={401:'wrongpass',404:'nofunc',413:'toolarge'};
+const failOf=r=>{ SYNC.code=r.status+(r.j&&r.j.error?' '+r.j.error:'')+(r.j&&r.j.detail?': '+r.j.detail:''); return r.j&&r.j.error==='not_set_up'?'notsetup':(FAIL[r.status]||'error'); };
 /* remote edits to items both sides have: take them when this browser hasn't changed that item since the last sync */
 function takeRemoteEdits(r){ const b=base(); if(!b) return false; let ch=false; const loc=masterData();
   for(const [k,v] of Object.entries(r.custom||{})){ const bv=(b.custom||{})[k]; if(st.custom[k]&&loc.custom[k]&&bv&&stable(bv)!==stable(v)&&stable(loc.custom[k])===stable(bv)){ Object.assign(st.custom[k],v); ch=true; } }
@@ -2012,11 +2013,11 @@ async function syncNow(){
   SYNC.busy=true; SYNC.state='saving'; paint();
   try{
     revive();
-    const g=await api('GET'); if(g.status!==200){ SYNC.state=FAIL[g.status]||'error'; return; }
+    const g=await api('GET'); if(g.status!==200){ SYNC.state=failOf(g); return; }
     const remote=g.j&&g.j.doc; SYNC.lastPull=Date.now();
     if(remote&&remote.version===1){ const a=takeRemoteEdits(remote), b=mergeIn(remote); if(a||b){ save(); render(); } }
     const doc=docOf();
-    if(!remote||sigOf(remote)!==sigOf(doc)){ const p=await api('PUT',doc); if(p.status!==200){ SYNC.state=FAIL[p.status]||'error'; return; } doc.savedAt=p.j.savedAt; }
+    if(!remote||sigOf(remote)!==sigOf(doc)){ const p=await api('PUT',doc); if(p.status!==200){ SYNC.state=failOf(p); return; } doc.savedAt=p.j.savedAt; }
     else doc.savedAt=remote.savedAt;
     lsSet(BASEKEY,JSON.stringify(doc)); st.masterRev={vids:[],dishes:[]}; save();
     SYNC.state='saved'; SYNC.at=doc.savedAt;
@@ -2050,10 +2051,10 @@ function msInner(){
   else switch(SYNC.state){
     case 'nopass': warn=nV+nD>0; body=passBox('Enter your family passcode once on this device to share favourites with your other devices.'); break;
     case 'wrongpass': warn=true; body=passBox('⚠ That passcode doesn\'t match the one set on your Netlify site.'); break;
-    case 'notsetup': warn=true; body=`<p class="mstat">⚠ Sharing isn't set up on the site yet.</p><p class="fod" style="font-size:12.5px;margin:0">In Netlify, add the environment variable <b>MEAL_PLANNER_PASSCODE</b> and deploy again.</p>`; break;
-    case 'nofunc': warn=true; body=`<p class="mstat">⚠ The sharing function isn't on the site.</p><p class="fod" style="font-size:12.5px;margin:0">Deploy the whole NutriLens folder (with <b>netlify/functions/meal-master.mjs</b> and <b>package.json</b>) from Git or the Netlify CLI.</p>`; break;
+    case 'notsetup': warn=true; body=`<p class="mstat">⚠ Sharing isn't set up on the site yet.</p><p class="fod" style="font-size:12.5px;margin:0">In Netlify, add the environment variable <b>MEAL_PLANNER_PASSCODE</b> (scope: all, or including Functions; for Production) and deploy again.</p><div class="rp-row"><button type="button" class="btn sec sm" id="ms-sync">Try again</button></div>`; break;
+    case 'nofunc': warn=true; body=`<p class="mstat">⚠ The sharing function isn't on the site.</p><p class="fod" style="font-size:12.5px;margin:0">Deploy the whole NutriLens folder (with <b>netlify/functions/meal-master.mjs</b> and <b>package.json</b>) from Git or the Netlify CLI.</p><div class="rp-row"><button type="button" class="btn sec sm" id="ms-sync">Try again</button></div>`; break;
     case 'toolarge': warn=true; body=`<p class="mstat">⚠ Too much to save online in one go.</p>`; break;
-    case 'offline': case 'error': warn=true; body=`<p class="mstat">⚠ Couldn't reach your site. Changes are kept here and will save when it's back.</p><div class="rp-row"><button type="button" class="btn sec sm" id="ms-sync">Try again</button></div>`; break;
+    case 'offline': case 'error': warn=true; body=`<p class="mstat">⚠ Couldn't ${SYNC.state==='error'?'save to':'reach'} your site. Changes are kept here and will save when it's back.</p>${SYNC.state==='error'&&SYNC.code?`<p class="fod" style="font-size:12px;margin:0">Site said: ${esc(SYNC.code)}</p>`:''}<div class="rp-row"><button type="button" class="btn sec sm" id="ms-sync">Try again</button></div>`; break;
     case 'saving': body=`<p class="mstat">Saving…</p>`; break;
     default: { const pend=masterPending(); warn=pend;
       body=`<p class="mstat">${pend?'Waiting to save…':`✓ Shared with your devices${SYNC.at?' · saved '+ago(SYNC.at):''}`}</p>
