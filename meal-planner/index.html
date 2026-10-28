@@ -2024,7 +2024,7 @@ async function syncNow(){
   finally{ SYNC.busy=false; paint(); if(SYNC.again){ SYNC.again=false; schedule(300); } }
 }
 function schedule(ms){ clearTimeout(SYNC.timer); SYNC.timer=setTimeout(syncNow,ms==null?1500:ms); }
-function masterPending(){ revive(); const b=base(); return !b||sigOf(b)!==sigOf(docOf()); }
+function masterPending(){ revive(); const b=base()||MD; return !b||sigOf(b)!==sigOf(docOf()); } // nothing beyond the built-in list = nothing to share
 NL.masterPending=masterPending; NL.syncNow=syncNow; NL.SYNC=SYNC;
 const NEEDS_USER=['nopass','wrongpass','notsetup','nofunc','toolarge'];
 function markMaster(){ const b=$('favbtn'); if(!b||!ONLINE) return;
