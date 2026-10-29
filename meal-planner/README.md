@@ -24,12 +24,12 @@ The Meal Planner is a separate page (`meal-planner/index.html`) that opens from 
    - An outlined G badge appears for guest notes.
    - FODMAP comes from the meal list; other conditions come from Gemini. Results are kept until a profile changes.
    - "View as" shows the week from one person's point of view.
-5. **Suggest boxes** for the week (Suggest week), day (👥 button) and meal (⚙).
+5. **Suggest boxes** for the week (**Regenerate week** asks for your requirements first, then plans every meal; tick "Keep the dishes already in the week" to fill only empty meals), day (👥 button) and meal (⚙).
    - **Only the meals a box asks for are filled:** "idli for breakfast" fills breakfasts; "Sunday lunch chicken dish" fills only that meal.
    - A general request (or empty boxes) fills every empty meal in that scope.
    - A meal's box beats its day's, and a day's beats the week's, where they clash. Dishes you placed are never replaced.
    - Each box shows what it understood, and Undo reverses a fill.
-   - **Clear:** one meal (⚙), a day (👥), one slot across the week ("Clear row" on desktop, or Suggest week), or the whole week (Suggest week). Undo works.
+   - **Clear:** one meal (⚙), a day (👥), one slot across the week ("Clear row" on desktop, or the Regenerate week box), or the whole week (Regenerate week box). Undo works.
 6. **Ingredients.** Raw ingredients as bought (rice and urad dal, never "idli batter" or "cooked rice"), with a category, estimated per serving once per dish. Favourites also use the video description. Edit them under Groceries → Dish ingredients.
 7. **Groceries.**
    - Grouped as Vegetables & herbs, Fruits, Dairy & eggs, Meat & fish, Pantry, and Pantry basics.

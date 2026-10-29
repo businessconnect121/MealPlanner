@@ -188,6 +188,8 @@ li[data-c] a,li[data-c] .dn,#lib-rows .dchip{-webkit-user-drag:none;user-drag:no
 .ownlbl{font-size:12px;letter-spacing:0;text-transform:none}
 .lempty{flex-basis:100%}
 @media (max-width:760px){.lrow{padding:2px 4px 2px 2px;gap:3px}.lrow .dchip{font-size:12px;padding:2px 6px}.lrow .grip{width:20px;height:24px}.lrows{gap:5px}}
+
+.aco small .simtag{color:var(--leaf);font-weight:600}
 /* ---- NutriLens-only planner features ---- */
 :root{--fav:#9B2F6E;--fav-bg:#F8E6F0;--ok:#2D6845;--ok-bg:#E3F1E6;--lim:#8A5A08;--lim-bg:#FBEFD5;--no:#B3261E;--no-bg:#FBE4E2}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--fav:#F0A6CF;--fav-bg:#3B2231;--ok:#86C79C;--ok-bg:#1F3328;--lim:#E9BE6A;--lim-bg:#3A2E15;--no:#F2B8B5;--no-bg:#3D1F1D}}
@@ -289,6 +291,19 @@ td li .dn{flex:1 1 0;min-width:0}td li .btns{flex:none}
 .master{display:grid;gap:8px;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
 .master.unsaved{border-color:var(--no);background:var(--no-bg)}
 .mstat{margin:0;font-size:14px;font-weight:600}
+
+/* Manage dishes */
+#mg-q,#mg-new{width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--card);color:var(--ink)}
+#mg-list{max-height:min(55vh,520px);overflow:auto}
+.mg-star{color:var(--turm)}
+.mg-hid b{opacity:.6}
+.btn.mg-danger{border-color:var(--no);color:var(--no);background:var(--no-bg)}
+/* Cooking-time filter */
+.lib-t select{font:inherit;font-size:13.5px;padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+.dchip .tmin{margin-left:5px;font-size:11px;font-weight:600;color:var(--muted)}
+@media (max-width:760px){.lib.timed .lib-count{display:block;font-size:12px}.lib-t{flex:1 1 100%}.lib-t select{width:100%}}
+.chk{display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer}
+#gro-mic.listening{background:var(--no-bg);border-color:var(--no);color:var(--no);animation:mpPulse 1.2s ease-in-out infinite}@keyframes mpPulse{50%{opacity:.55}}@media (prefers-reduced-motion:reduce){#gro-mic.listening{animation:none}}
 
 /* Replace action + panel */
 td li{display:flex;align-items:flex-start;gap:6px;justify-content:space-between}
@@ -846,7 +861,8 @@ let st={weeks:[],idx:0,seen:[]};
 try{const s=JSON.parse(localStorage.getItem(KEY)||'null'); if(s&&Array.isArray(s.weeks)&&s.weeks.length) st=s;}catch(e){}
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){}};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const linkOf=d=>(st.favDishes&&st.favDishes[d]&&st.favDishes[d].video)||(RX.INFO[d]&&RX.INFO[d].link)||LINKS[d]||(st.custom&&st.custom[d]&&st.custom[d].link)||'';
+const keptVideo=d=>{ const v=st.favs&&st.favs.videos&&Object.entries(st.favs.videos).find(([,x])=>x.dish===d&&!x.removed); return v?'https://www.youtube.com/watch?v='+v[0]:''; };
+const linkOf=d=>(st.favDishes&&st.favDishes[d]&&st.favDishes[d].video)||keptVideo(d)||(RX.INFO[d]&&RX.INFO[d].link)||LINKS[d]||(st.custom&&st.custom[d]&&st.custom[d].link)||'';
 const catOf=d=>(RX.INFO[d]&&RX.INFO[d].cat)||POOL.cat[d]||'U';
 const nm=d=>linkOf(d)?`<a class="vid" draggable="false" href="${esc(linkOf(d))}" target="_blank" rel="noopener noreferrer" title="Watch a recipe video on YouTube">${esc(d)}<span class="play" aria-hidden="true">▶</span></a>`:esc(d);
 const item=d=>nm(d)+(catOf(d)==='H'?'<span class="ctag" title="Rated High FODMAP in the list">high</span>':catOf(d)==='V'?'<span class="ctag" title="Marked Verify in the list: not yet checked">verify</span>':catOf(d)==='U'?'<span class="ctag own" title="Your own dish: not in the meal list, so not rated">your dish</span>':catOf(d)!=='L'?'<span class="lim" title="Limited item: keep to the listed portion / make as noted" aria-label="limited item"></span>':'');
@@ -882,6 +898,93 @@ const redo=()=>{const w=st.weeks[st.idx];
   n.fixed={};for(const [k,v] of Object.entries(w.fixed||{})){const [d,s]=k.split('|');n.days[+d][s]=v.filter(x=>dietOkAny(x,n));n.fixed[k]=v;}
   st.weeks[st.idx]=n;undo.length=0;hideToast();save();render();};
 document.getElementById('fish').onchange=redo;document.getElementById('eggs').onchange=redo;
+/* ---------- Same / similar dish names ----------
+   SIM.key(name): ignores capitals, spaces, punctuation, doubled letters and common spelling variants
+   (Idly = idli, "Pudina-Amla drink" = "pudina amla drink").
+   SIM.find(query, names): dishes that are the same with other words for the same thing
+   (pudina = mint, nellikai = amla, kezhvaragu = ragi, drink = juice …) or that share most of their words.
+   All local: no AI call, works offline. */
+const SIM=(()=>{
+  const GROUPS=[
+    ['mint','pudina','pudhina','pudeena','podina','phudina'],
+    ['amla','nellikai','nellikkai','nelikai','gooseberry','indian gooseberry','avla','aonla','usiri'],
+    ['coriander','kothamalli','kothamali','kothimbir','dhania','dhaniya','cilantro','coriander leaves'],
+    ['curry leaf','curry leaves','karuveppilai','kariveppilai','karivepaku','kadi patta','curry patta'],
+    ['drumstick','murungai','murungakkai','moringa','sahjan'],
+    ['drumstick leaves','murungai keerai','moringa leaves'],
+    ['ragi','kezhvaragu','kelvaragu','kezhvaragu','finger millet','nachni','nachani','mandua'],
+    ['foxtail millet','thinai','tenai','kangni','navane'],['little millet','samai','saamai','kutki'],['kodo millet','varagu','kodra'],
+    ['barnyard millet','kuthiraivali','kudiraivali','sanwa','jhangora'],['pearl millet','kambu','bajra','sajje'],['sorghum','cholam','jowar','jonna'],
+    ['idli','idly','iddli','idlee'],['dosa','dosai','dhosa','thosai','dose'],['vada','vadai','wada','vade'],['sambar','sambhar','saambar'],
+    ['rasam','saaru','chaaru','charu'],['upma','uppuma','uppittu'],['pongal','pongali'],['paniyaram','paddu','kuzhi paniyaram','gunta ponganalu','appe'],
+    ['payasam','kheer','payasa','payesh','paysam'],['kozhukattai','kozhukkattai','kozhakattai','kolukattai'],['biryani','biriyani','briyani'],
+    ['kurma','korma','kuruma'],['kootu','kuttu'],['poriyal','thoran','palya','stir fry'],['chutney','chatni','chammanthi'],
+    ['curd','yogurt','yoghurt','thayir','dahi','perugu','mosaru'],['buttermilk','moru','mor','chaas','chhaas','majjiga','neer mor'],
+    ['drink','juice','cooler','sharbat','sherbet','sarbath','sarbat'],
+    ['brinjal','eggplant','aubergine','kathirikai','kathrikai','baingan','vankaya'],['okra','ladies finger','lady finger','vendakkai','vendaikai','bhindi','bendakaya'],
+    ['potato','urulai','urulaikizhangu','aloo','alu'],['spinach','keerai','palak'],['bitter gourd','pavakkai','paavakkai','karela','kakarakaya'],
+    ['bottle gourd','sorakkai','surakkai','lauki','dudhi','sorakai'],['ash gourd','poosanikai','winter melon','petha','white pumpkin'],
+    ['snake gourd','pudalangai','padwal'],['ridge gourd','peerkangai','turai','beerakaya'],['pumpkin','parangikai','kaddu','mathan'],
+    ['raw banana','vazhakkai','plantain','kacha kela'],['banana stem','vazhaithandu'],['banana flower','vazhaipoo'],
+    ['jaggery','vellam','gur','bellam'],['ghee','nei','neyyi'],['lemon','lime','elumichai','elumichampazham','nimbu'],
+    ['tamarind','puli','imli','chintapandu'],['chickpea','chickpeas','kadalai','channa','chana','chole','kabuli chana'],
+    ['black chickpea','karuppu kondakadalai','kala chana','kondakadalai'],['green gram','moong','moong dal','pachai payaru','pasi payaru','pesalu','mung'],
+    ['split green gram','pasi paruppu','pasiparuppu','yellow moong'],['toor dal','thuvaram paruppu','tuvar dal','arhar dal','pigeon pea'],
+    ['urad dal','ulundu','ulutham paruppu','black gram'],['horse gram','kollu','kulthi','ulavalu'],['cowpea','karamani','lobia','black eyed peas'],
+    ['kidney beans','rajma'],['peas','pattani','matar','mutter','green peas'],
+    ['coconut','thengai','thenga','nariyal','kobbari'],['garlic','poondu','lahsun','vellulli'],['ginger','inji','adrak','allam'],
+    ['onion','vengayam','pyaz','pyaaz','eerulli'],['small onion','shallot','shallots','sambar onion','chinna vengayam'],['tomato','thakkali','tamatar'],
+    ['carrot','gajar'],['cabbage','muttaikose','muttaikos','patta gobi'],['cauliflower','gobi','phool gobi'],['beetroot','beet'],
+    ['chicken','kozhi','murgh','murg'],['mutton','attukari','goat','gosht'],['fish','meen','machli','machhi'],['prawn','prawns','eral','shrimp','jhinga','royyalu'],
+    ['egg','eggs','muttai','anda','motta'],['rice','sadam','saadam','sadham','satham','chawal','annam'],['flattened rice','aval','poha','avalakki','atukulu'],
+    ['vermicelli','semiya','semiyan','sevai','seviyan'],['broken wheat','godhumai rava','dalia','daliya'],['semolina','rava','sooji','suji'],
+    ['flour','maavu','atta'],['porridge','kanji','kool','koozh','malt'],['kuzhambu','kulambu','kozhambu'],['pickle','oorugai','achar','achaar'],
+    ['roti','chapati','chappathi','phulka'],['paratha','parotta','porotta'],['sweet potato','sakkaraivalli','shakarkand'],['mushroom','kaalan','kalan'],
+    ['fenugreek','vendhayam','methi'],['cumin','jeera','seeragam','jeeragam'],['pepper','milagu','kali mirch'],['sesame','ellu','til'],['peanut','verkadalai','groundnut','moongphali'],
+    ['sprouts','sprouted','mulaikattiya']
+  ];
+  const FILL=new Set('recipe recipes homemade home made style healthy easy quick instant simple tasty special tamil south indian the a an of with and in for my amma ammas mom moms grandma paati traditional best authentic perfect delicious yummy style shorts video how to make'.split(' '));
+  const base=s=>String(s||'').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/['’`]/g,'').replace(/[^a-z0-9஀-௿ऀ-ॿ]+/g,' ').trim();
+  const squash=w=>w.replace(/h/g,'').replace(/(.)\1+/g,'$1').replace(/y$/,'i').replace(/ee/g,'i');
+  const sing=w=>w.length>4&&/[^s]s$/.test(w)?w.slice(0,-1):w;
+  const word=new Map(), phrase=[];
+  for(const g of GROUPS){ const id='§'+g[0].replace(/\s+/g,'');
+    for(const v of g){ const n=base(v); if(n.includes(' ')) phrase.push([n,id]); else { word.set(n,id); word.set(squash(n),id); word.set(squash(sing(n)),id); } } }
+  phrase.sort((a,b)=>b[0].length-a[0].length);
+  const key=s=>base(s).split(' ').filter(Boolean).map(w=>squash(sing(w))).join(' ');
+  const cache=new Map();
+  function tokens(s){ const k=String(s); if(cache.has(k)) return cache.get(k);
+    let t=' '+base(s)+' '; for(const [p,id] of phrase) if(t.includes(' '+p+' ')) t=t.split(' '+p+' ').join(' '+id+' ');
+    const out=[...new Set(t.trim().split(' ').filter(w=>w&&!FILL.has(w)).map(w=>w[0]==='§'?w:(word.get(w)||word.get(sing(w))||word.get(squash(sing(w)))||fuzzyWord(squash(sing(w))))))];
+    if(cache.size>6000) cache.clear(); cache.set(k,out); return out; }
+  function lev(a,b,max=3){ if(Math.abs(a.length-b.length)>max) return 9; const m=a.length,n=b.length; let p2=null,p=[...Array(n+1).keys()];
+    for(let i=1;i<=m;i++){ const c=[i]; let low=i; for(let j=1;j<=n;j++){ let v=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));
+        if(p2&&i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1]) v=Math.min(v,p2[j-2]+1); c[j]=v; if(v<low) low=v; }
+      if(low>max) return 9; p2=p; p=c; } return p[n]; }
+  const allow=n=>n>=8?2:n>=4?1:0; // mistakes tolerated for a word of this length
+  const near=(a,b)=>{ const k=allow(Math.min(a.length,b.length)); return k>0&&a[0]===b[0]&&lev(a,b,k)<=k; };
+  const fz=new Map();
+  function fuzzyWord(w){ if(w.length<4) return w; if(fz.has(w)) return fz.get(w); let best=w,bd=9;
+    for(const [k,id] of word) if(k.length>=4&&k[0]===w[0]&&Math.abs(k.length-w.length)<=2&&(Math.min(k.length,w.length)>=5||k[1]===w[1]||[...k].sort().join('')===[...w].sort().join(''))){ const d=lev(w,k,allow(Math.min(k.length,w.length))); if(d<=allow(Math.min(k.length,w.length))&&d<bd){ bd=d; best=id; } }
+    fz.set(w,best); return best; }
+  const same=(a,b)=>a===b||(a[0]!=='§'&&b[0]!=='§'&&near(a,b));
+  const compact=s=>key(s).replace(/ /g,'');
+  /* names that are the same dish (kind 'same') or close (kind 'similar'), best first */
+  function find(q,names,limit=8){ const qt=tokens(q); if(!qt.length) return []; const qk=key(q), qc=compact(q); const out=[];
+    for(const n of names){ const nt=tokens(n); if(!nt.length) continue;
+      const nc=compact(n); const k=Math.min(3,Math.floor(Math.min(qc.length,nc.length)/5));
+      const whole=qk.split(' ').length!==key(n).split(' ').length&&Math.abs(nc.length-qc.length)<=k&&lev(qc,nc,k)<=k; // words joined or split: "bisibele bath" = "Bisi bele bath"
+      const hit=qt.filter(a=>nt.some(b=>same(a,b))).length; if(!hit&&!whole) continue;
+      const back=nt.filter(b=>qt.some(a=>same(a,b))).length;
+      const kind=key(n)===qk||whole||(hit===qt.length&&back===nt.length)?'same':null;
+      const score=hit/Math.max(qt.length,nt.length);
+      if(kind||(score>=0.5&&hit>=Math.min(2,qt.length))) out.push({n,kind:kind||'similar',score:kind?2:score}); }
+    return out.sort((a,b)=>b.score-a.score||a.n.length-b.n.length).slice(0,limit); }
+  return {key,tokens,find,same:(a,b)=>key(a)===key(b)};
+})();
+const allDishNames=()=>Object.keys(RX.INFO).concat(ownList());
+const findSameName=n=>allDishNames().find(x=>SIM.same(x,n));
+
 /* ---------- Replace one dish ---------- */
 const $=id=>document.getElementById(id);
 const dlg=$('rp'); let ctx=null, pref='', shown=5, results=[], ctl=null;
@@ -1156,15 +1259,18 @@ function ownForm(){
   if(!f.hidden){ $('own-name').value=$('rp-q').value.trim(); $('own-msg').textContent=''; $('own-name').focus(); }
 }
 $('own-toggle').onclick=ownForm;
+let ownForce='';
 $('own-add').onclick=()=>{
   const name=$('own-name').value.replace(/\s+/g,' ').trim(); const link=$('own-link').value.trim(); const note=$('own-note').value.replace(/\s+/g,' ').trim();
   const msg=t=>{ $('own-msg').textContent=t; };
   if(!name){ msg('Give the dish a name.'); $('own-name').focus(); return; }
   if(name.length>80){ msg('Keep the name under 80 characters.'); return; }
   if(link&&!YT_RX.test(link)){ msg('That link doesn\'t look like a YouTube link (youtube.com or youtu.be). Leave it empty if there isn\'t one.'); $('own-link').focus(); return; }
-  const inList=Object.keys(RX.INFO).find(n=>n.toLowerCase()===name.toLowerCase());
+  const inList=Object.keys(RX.INFO).find(n=>SIM.same(n,name));
   if(inList){ msg(`“${inList}” is already in your meal list. It's shown above.`); $('rp-q').value=inList; addCats.add(RX.INFO[inList].cat); setScope('all'); runLocal(); return; }
-  const meal=ctx.w.days[ctx.day][ctx.slot]; const ex=Object.keys(st.custom).find(n=>n.toLowerCase()===name.toLowerCase());
+  if(ownForce!==name){ const sim=SIM.find(name,allDishNames(),3).filter(h=>!SIM.same(h.n,name)); const top=sim.find(h=>h.kind==='same')||(sim[0]&&sim[0].score>=0.67?sim[0]:null);
+    if(top){ ownForce=name; msg(`Looks like “${top.n}”, already in your ${RX.INFO[top.n]?'meal list':'dishes'}. Search for it above, or press Add again to keep “${name}” as a separate dish.`); return; } }
+  const meal=ctx.w.days[ctx.day][ctx.slot]; const ex=Object.keys(st.custom).find(n=>SIM.same(n,name));
   const key=ex||name;
   if(meal.includes(key)){ msg('That dish is already in this meal.'); return; }
   st.custom[key]={link:link||(ex?st.custom[ex].link:''),note:note||(ex?st.custom[ex].note:''),slots:[...new Set([...((ex&&st.custom[ex].slots)||[]),ctx.slot])]};
@@ -1452,6 +1558,11 @@ function suggest(q,d,s){
   for(const n in RX.INFO){ const r=rank(n); if(r===9) continue; const I=RX.INFO[n];
     if((w.fishMeat===false&&I.nonveg)||(w.eggs===false&&I.egg)) continue;
     out.push({n,r,cat:I.cat,slot:(I.bits&bit)||(s==='nightDrink'&&I.cuisine==='Drink')?1:0}); }
+  // same dish under another name or spelling (pudina = mint, idly = idli …) and close matches
+  if(t.length>=3) for(const h of SIM.find(q,allDishNames(),8)){ const exact=SIM.same(q,h.n); const tag=exact?null:h.kind;
+    const ex=out.find(x=>x.n===h.n); if(ex){ if(h.kind==='same'){ ex.r=-1; ex.sim=tag; } continue; }
+    const I=RX.INFO[h.n]; if(I&&((w.fishMeat===false&&I.nonveg)||(w.eggs===false&&I.egg))) continue;
+    out.push({n:h.n,r:h.kind==='same'?-1:3,cat:I?I.cat:'U',own:I?0:1,slot:I?((I.bits&bit)||(s==='nightDrink'&&I.cuisine==='Drink')?1:0):((st.custom[h.n].slots||[]).includes(s)?1:0),sim:tag}); }
   const co={U:0,L:1,P:2,R:3,V:4,H:5};
   out.forEach(x=>x.fav=(st.favDishes||{})[x.n]?1:0);
   out.sort((a,b)=>a.r-b.r||b.fav-a.fav||b.slot-a.slot||co[a.cat]-co[b.cat]||a.n.length-b.n.length||a.n.localeCompare(b.n));
@@ -1476,8 +1587,8 @@ window.addEventListener('scroll',acPos,{passive:true}); window.addEventListener(
 function acUpdate(){
   const q=AC.input.value; const L=$('aclist'); const {d,s}=AC.cell;
   const all=suggest(q,d,s); AC.items=all.slice(0,40); AC.total=all.length;
-  const exact=all.find(x=>x.n.toLowerCase()===q.trim().toLowerCase().replace(/\s+/g,' '));
-  const rows=AC.items.map((x,i)=>`<li role="option" id="aco${i}" class="aco${x.inMeal?' dim':''}${x.fav?' fav':''}" data-i="${i}" aria-selected="false"><span>${x.fav?'<b class="star" aria-label="favourite">★</b> ':''}${esc(x.n)}</span><small class="c-${x.cat}">${x.inMeal?'already in this meal':CATTXT[x.cat]}${!x.slot&&!x.own?' · not listed for this meal':''}</small></li>`);
+  const exact=all.find(x=>SIM.same(x.n,q));
+  const rows=AC.items.map((x,i)=>`<li role="option" id="aco${i}" class="aco${x.inMeal?' dim':''}${x.fav?' fav':''}" data-i="${i}" aria-selected="false"><span>${x.fav?'<b class="star" aria-label="favourite">★</b> ':''}${esc(x.n)}</span><small class="c-${x.cat}">${x.sim?`<b class="simtag">≈ ${x.sim==='same'?'same dish?':'similar'}</b> · `:''}${x.inMeal?'already in this meal':CATTXT[x.cat]}${!x.slot&&!x.own?' · not listed for this meal':''}</small></li>`);
   const extra=[];
   if(q.trim()&&!exact) extra.push(`<li role="option" id="acnew" class="aco acnew" data-act="new" aria-selected="false"><span>+ Save “${esc(q.trim())}” as a new dish…</span></li>`);
   extra.push(`<li role="option" id="acbrowse" class="aco acbrowse" data-act="browse" aria-selected="false"><span>Browse the full list with filters…</span></li>`);
@@ -1495,7 +1606,7 @@ function acKey(e){
 }
 function acEnter(){ // Enter without a highlighted suggestion
   const q=AC.input.value.trim().replace(/\s+/g,' '); if(!q) return;
-  const hit=Object.keys(RX.INFO).concat(ownList()).find(n=>n.toLowerCase()===q.toLowerCase());
+  const hit=findSameName(q);
   if(hit) acAdd(hit); else openNewDish(q);
 }
 function acChoose(o){
@@ -1517,8 +1628,14 @@ function openNewDish(name){
   ndCell=AC.cell?{...AC.cell}:null; if(!ndCell) return;
   $('nd-name').value=name.slice(0,80); $('nd-link').value=''; $('nd-note').value=''; $('nd-msg').textContent='';
   $('nd-where').textContent=`It will be added to ${DAYS[ndCell.d]} ${slotLabel(ndCell.s).toLowerCase()} and kept under ${slotLabel(ndCell.s)} in the meal combinations, so you can drag it to other days.`;
-  $('aclist').hidden=true; nd.showModal(); $('nd-link').focus();
+  $('aclist').hidden=true; nd.showModal(); $('nd-link').focus(); ndForce=''; ndCheck(name.slice(0,80));
 }
+/* warn when the new name looks like a dish that already exists; a second Save keeps it as a separate dish */
+let ndForce='';
+function ndCheck(name){ const sim=SIM.find(name,allDishNames(),3).filter(h=>!SIM.same(h.n,name)); const top=sim.find(h=>h.kind==='same')||(sim[0]&&sim[0].score>=0.67?sim[0]:null);
+  if(!top) return false; ndForce=name;
+  $('nd-msg').innerHTML=`Looks like <b>${esc(top.n)}</b>, already in your ${RX.INFO[top.n]?'meal list':'dishes'}. <button type="button" class="btn sm" id="nd-use">Use ${esc(top.n)}</button> Or press Save to keep “${esc(name)}” as a separate dish.`;
+  $('nd-use').onclick=()=>{ const {d,s}=ndCell; AC.input=null; nd.close(); placeInto(d,s,[top.n],false); }; return true; }
 $('nd-cancel').onclick=()=>nd.close();
 nd.addEventListener('close',()=>{ if(AC.input){ AC.input.focus(); acUpdate(); } });
 $('nd-form').addEventListener('submit',e=>{
@@ -1527,9 +1644,10 @@ $('nd-form').addEventListener('submit',e=>{
   const msg=t=>{ $('nd-msg').textContent=t; };
   if(!name){ msg('Give the dish a name.'); $('nd-name').focus(); return; }
   if(link&&!YT_RX.test(link)){ msg('That doesn\'t look like a YouTube link (youtube.com or youtu.be). Leave it empty if there isn\'t one.'); $('nd-link').focus(); return; }
-  const inList=Object.keys(RX.INFO).find(n=>n.toLowerCase()===name.toLowerCase());
+  const inList=Object.keys(RX.INFO).find(n=>SIM.same(n,name));
   if(inList){ msg(`“${inList}” is already in your meal list. Close this and pick it from the suggestions.`); return; }
-  const ex=ownList().find(n=>n.toLowerCase()===name.toLowerCase()); const key=ex||name; const {d,s}=ndCell;
+  if(ndForce!==name&&ndCheck(name)) return;
+  const ex=ownList().find(n=>SIM.same(n,name)); const key=ex||name; const {d,s}=ndCell;
   st.custom[key]={link:link||(ex?st.custom[ex].link:''),note:note||(ex?st.custom[ex].note:''),slots:[...new Set([...((ex&&st.custom[ex].slots)||[]),s])]};
   Store.putDish(key,st.custom[key]).catch(()=>{});
   AC.input=null; nd.close(); LIB.slot=s; LIB.q=''; $('lib-q').value=''; saveLib();
@@ -1674,8 +1792,7 @@ NL.isFav=d=>!!(st.favDishes&&st.favDishes[d]);
 /* ---------- second toolbar ---------- */
 { const bar=document.querySelector('.bar');
   const b2=document.createElement('div'); b2.className='bar2'; b2.id='bar2';
-  b2.innerHTML=`<button type="button" class="bbtn" id="weekbtn">Suggest week</button>
-    <button type="button" class="bbtn" id="checkbtn">Check for family</button>
+  b2.innerHTML=`<button type="button" class="bbtn" id="checkbtn">Check for family</button>
     <label class="viewas"><span class="vh">View as</span><select id="viewas" aria-label="View as"><option value="">View as: Everyone</option></select></label>
     <button type="button" class="bbtn" id="grobtn">Groceries</button>
     <button type="button" class="bbtn" id="favbtn">Favourites</button>
@@ -1777,25 +1894,40 @@ function openMeal(d,s){
   if($('ml-clear')) $('ml-clear').onclick=()=>{ store(); NL.clearMeal(d,s); };
   $('ml-fill').onclick=async()=>{ store(); await NL.fill({meals:[[d,s]],replace:filled},$('ml-status')); };
 }
-/* Week dialog (Suggest week) */
-$('weekbtn').onclick=()=>{
+/* Week dialog: Regenerate week asks what you want first */
+function openWeek(){
   const m=meta(); const wk=m.week;
-  const body=NL.dlg('Suggest week','Applies to every day unless a day or meal says otherwise',`
-   <div class="fld"><label class="lbl" for="wk-sug">Suggest for the week</label><textarea id="wk-sug" rows="3" placeholder="e.g. I have idli batter I can use 5–6 times. I'll cook only Monday and Wednesday. High-protein vegetarian lunches.">${esc(wk.suggest||'')}</textarea></div>
+  NL.dlg('Regenerate week','Tell it what you want. Every meal is planned again.',`
+   <div class="fld"><label class="lbl" for="wk-sug">What do you want this week?</label><textarea id="wk-sug" rows="4" placeholder="e.g. Breakfast: no upma or pongal. Lunch: more greens and dal. Evening snack within 15 minutes. I have idli batter I can use 5–6 times.">${esc(wk.suggest||'')}</textarea></div>
    ${chipsHtml(wk.understood)}
    <div class="frow"><div class="fld"><label class="lbl" for="wk-nov">Dishes</label><select id="wk-nov">${opt(NOVELTY,wk.novelty||'mix')}</select></div>
    <div class="fld"><label class="lbl" for="wk-time">Time to cook (default)</label><select id="wk-time">${opt(TIMES,wk.time||'')}</select></div>
    <div class="fld"><label class="lbl" for="wk-diet">Food (default)</label><select id="wk-diet">${opt(DIETS,wk.diet||'any')}</select></div></div>
-   <p class="fod" style="font-size:12.5px;margin:0">Only the meals your boxes ask for are filled: “idli for breakfast” fills breakfasts, “Sunday lunch chicken dish” fills just that meal. A general request, or empty boxes, fills every empty meal. If boxes disagree, a meal's box wins over its day's, and a day's over the week's. Dishes you placed are never replaced.</p>
-   <div class="rp-row"><button type="button" class="btn" id="wk-fill">Suggest</button><button type="button" class="btn sec" id="wk-save">Save</button></div>
+   <label class="chk"><input type="checkbox" id="wk-keep"> Keep the dishes already in the week (fill only the empty meals)</label>
+   <p class="fod" style="font-size:12.5px;margin:0">Your requirements here, on each day (👥) and on each meal (⚙) are all followed. If they disagree, a meal's box wins over its day's, and a day's over this one. Undo brings the previous week back.</p>
+   <div class="rp-row"><button type="button" class="btn" id="wk-fill">Regenerate week</button><button type="button" class="btn sec" id="wk-save">Save without regenerating</button></div>
    <div class="clearbox"><span class="lbl">Clear dishes</span><div class="rp-row"><select id="wk-cslot" aria-label="Meal slot to clear">${SLOTS.map(([k,l])=>`<option value="${k}">Every ${l.toLowerCase()}</option>`).join('')}</select><button type="button" class="btn sec danger-t" id="wk-cslot-go">Clear this slot</button><button type="button" class="btn sec danger-t" id="wk-clear">Clear whole week</button></div></div>
    <p class="rp-status" id="wk-status" role="status" aria-live="polite"></p>`);
   const store=()=>{ wk.suggest=$('wk-sug').value.trim(); wk.novelty=$('wk-nov').value; wk.time=$('wk-time').value; wk.diet=$('wk-diet').value; save(); };
   $('wk-save').onclick=()=>{ store(); NL.closeDlg(); render(); };
   $('wk-clear').onclick=()=>{ store(); NL.clearWeek(); };
   $('wk-cslot-go').onclick=()=>{ store(); NL.clearSlot($('wk-cslot').value); };
-  $('wk-fill').onclick=async()=>{ store(); await NL.fill({days:[0,1,2,3,4,5,6]},$('wk-status')); };
-};
+  $('wk-fill').onclick=async()=>{ store(); await regenerate($('wk-keep').checked,$('wk-status')); };
+  setTimeout(()=>$('wk-sug').focus(),30);
+}
+async function regenerate(keep,statusEl){
+  const idx=st.idx; const old=st.weeks[idx]; const before=JSON.stringify(old);
+  undo.push({t:'snap',w:idx,before}); // one Undo brings back the week as it was
+  if(!keep){ const w=JSON.parse(before); w.custom=true; w.swaps=[]; w.adds=[]; w.dels=[]; w.fixed={}; delete w.savedId; delete w.savedName; delete w.savedHash; delete w.checked;
+    w.days=DAYS.map(()=>Object.fromEntries(SLOTS.map(([k])=>[k,[]]))); st.weeks[idx]=w; save(); render(); }
+  const wasOpen=$('mpo').open;
+  await NL.fill({days:[0,1,2,3,4,5,6],all:true,noUndo:true},statusEl);
+  const w=st.weeks[idx]; const any=w.days.some(d=>Object.values(d).some(x=>x.length));
+  if(!keep&&!any){ st.weeks[idx]=JSON.parse(before); undo.pop(); save(); render(); if(statusEl&&!statusEl.textContent) statusEl.textContent='Nothing was planned, so your week is unchanged.'; return; }
+  if(!keep&&old.savedName&&!$('mpo').open&&wasOpen) showToast(`Week regenerated. Your saved plan “${old.savedName}” is unchanged. Undo is here if you don't like it.`);
+}
+NL.regenerate=regenerate; NL.openWeek=openWeek;
+$('regen').onclick=openWeek;
 
 /* Render decorations: day headers and meal ⚙ */
 function dayChips(d){ const w=st.weeks[st.idx], m=meta(w), dm=m.days[d]; const n=dm.people||st.family.size||3; const diet=dm.diet||'';
@@ -1876,8 +2008,8 @@ ${chunk.map((r,k)=>`${k+1} | ${r.title.replace(/\|/g,'/').slice(0,140)} | ${r.ca
 function addFavourite(r,pid){
   const url=vurl(r.vid);
   let name=r.link||r.dish;
-  if(!r.link){ const inList=Object.keys(RX.INFO).find(n=>n.toLowerCase()===name.toLowerCase()); if(inList) name=inList; }
-  if(!RX.INFO[name]){ const ex=Object.keys(st.custom).find(n=>n.toLowerCase()===name.toLowerCase()); if(ex) name=ex;
+  if(!r.link){ const inList=Object.keys(RX.INFO).find(n=>SIM.same(n,name)); if(inList) name=inList; }
+  if(!RX.INFO[name]){ const ex=Object.keys(st.custom).find(n=>SIM.same(n,name)); if(ex) name=ex;
     st.custom[name]={...(st.custom[name]||{}),link:url,note:(st.custom[name]||{}).note||'From your YouTube playlist',slots:[...new Set([...(((st.custom[name]||{}).slots)||[]),...r.slots])],fav:true,diet:r.diet}; delete st.custom[name].forgotten;
     try{ Store.putDish(name,st.custom[name]).catch(()=>{}); }catch(e){} }
   st.favDishes[name]={video:url,vid:r.vid,title:r.title};
@@ -1895,7 +2027,8 @@ function favMain(msg){
    ${NL.masterSection?NL.masterSection():''}
    ${pls.length?`<div><span class="lbl">Playlists</span><ul class="sp-list">${pls.map((p,i)=>`<li class="sp-item"><div><b>${esc(p.title)}</b><span>${Object.values(st.favs.videos).filter(v=>v.playlist===p.id&&!v.removed).length} favourites · synced ${esc(fmtDate(p.synced))}</span></div><div class="sp-acts"><button type="button" class="btn sec sm" data-sync="${i}">Re-sync</button><button type="button" class="btn sec sm" data-unpl="${i}">Remove</button></div></li>`).join('')}</ul></div>`:''}
    ${removed.length?`<div><span class="lbl">No longer in the playlist (${removed.length})</span><ul class="sp-list">${removed.map(([vid,v])=>`<li class="sp-item"><div><b>${esc(v.dish)}</b><span>${esc(v.title)}</span></div><div class="sp-acts"><button type="button" class="btn sec sm" data-keep="${vid}">Keep</button><button type="button" class="btn sec sm" data-unfav="${vid}">Remove favourite</button></div></li>`).join('')}</ul></div>`:''}
-   ${Object.keys(st.favDishes).length?`<div><span class="lbl">Favourite dishes (${Object.keys(st.favDishes).length})</span><p class="favlist">${Object.keys(st.favDishes).sort().map(n=>`<span class="favchip">★ ${esc(n)}</span>`).join(' ')}</p></div>`:''}`);
+   <div class="rp-row"><button type="button" class="btn sec" id="mg-open">Manage dishes</button><span class="fod" style="font-size:12.5px">${Object.keys(st.favDishes).length} ★ favourites · ${ownList().length} your dishes${st.hidden&&st.hidden.length?` · ${st.hidden.length} hidden`:''}</span></div>`);
+  $('mg-open').onclick=()=>NL.openManage();
   $('pl-go').onclick=()=>importPl($('pl-url').value);
   $('pl-url').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); importPl($('pl-url').value); } };
   body.querySelectorAll('[data-sync]').forEach(b=>b.onclick=()=>importPl(pls[+b.dataset.sync].id));
@@ -1952,23 +2085,25 @@ NL.after(()=>{ document.querySelectorAll('li[data-c]').forEach(li=>{ const [d,s,
    The master meal list itself is never changed. */
 st.masterDel=st.masterDel||{vids:[],dishes:[]};
 st.masterRev=st.masterRev||{vids:[],dishes:[]}; // re-added after being removed, not yet shared
+st.hidden=st.hidden||[]; // master-list dishes hidden from searches and suggestions
 const MD=(window.MY_DISHES&&window.MY_DISHES.version===1)?window.MY_DISHES:null;
 const stable=v=>JSON.stringify(v,(k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.keys(x).sort().map(n=>[n,x[n]])):x);
 const ownOut=c=>({link:c.link||'',note:c.note||'',slots:c.slots||[],fav:!!c.fav,diet:c.diet||''});
 function masterData(){ return {
   playlists:(st.favs.playlists||[]).map(p=>({id:p.id,title:p.title,synced:p.synced})),
-  videos:st.favs.videos||{}, favDishes:st.favDishes||{},
+  videos:st.favs.videos||{}, favDishes:st.favDishes||{}, hidden:[...(st.hidden||[])], times:st.ttime||{}, // cooking-time estimates: shared so each device asks Gemini only once
   custom:Object.fromEntries(Object.entries(st.custom||{}).filter(([n,c])=>!c.forgotten&&!c.idea&&!RX.INFO[n]).map(([n,c])=>[n,ownOut(c)])) }; }
 function docOf(){ return {version:1,...masterData(),del:{vids:[...st.masterDel.vids],dishes:[...st.masterDel.dishes]}}; }
-const sigOf=d=>stable({p:(d.playlists||[]).map(p=>p.id).sort(),v:d.videos||{},f:d.favDishes||{},c:d.custom||{},x:{v:[...((d.del||{}).vids||[])].sort(),d:[...((d.del||{}).dishes||[])].sort()}});
+const sigOf=d=>stable({p:(d.playlists||[]).map(p=>p.id).sort(),v:d.videos||{},f:d.favDishes||{},c:d.custom||{},x:{v:[...((d.del||{}).vids||[])].sort(),d:[...((d.del||{}).dishes||[])].sort()},h:[...(d.hidden||[])].sort(),t:Object.keys(d.times||{}).length});
 const usedInWeeks=n=>st.weeks.some(w=>w.days.some(d=>Object.values(d).some(m=>m.includes(n))));
 function dropDish(n){ if(!st.custom[n]) return; if(usedInWeeks(n)) st.custom[n].forgotten=true; else delete st.custom[n]; try{ Store.delDish(n).catch(()=>{}); }catch(e){} }
 /* add what's missing from src; apply src's removals */
 function mergeIn(src){ let ch=false; const D=st.masterDel, R=st.masterRev;
   for(const p of src.playlists||[]){ const x=st.favs.playlists.find(q=>q.id===p.id); if(!x){ st.favs.playlists.push({...p}); ch=true; } else if(p.synced&&(!x.synced||p.synced>x.synced)){ x.synced=p.synced; ch=true; } }
   for(const [vid,v] of Object.entries(src.videos||{})) if(!st.favs.videos[vid]&&!D.vids.includes(vid)){ st.favs.videos[vid]={...v}; ch=true; }
-  for(const [n,f] of Object.entries(src.favDishes||{})) if(!st.favDishes[n]&&!D.vids.includes(f.vid)&&!D.dishes.includes(n)&&st.favs.videos[f.vid]){ st.favDishes[n]={...f}; ch=true; }
+  for(const [n,f] of Object.entries(src.favDishes||{})) if(!st.favDishes[n]&&!D.vids.includes(f.vid)&&!D.dishes.includes(n)&&st.favs.videos[f.vid]&&!st.favs.videos[f.vid].unfav){ st.favDishes[n]={...f}; ch=true; }
   for(const [n,c] of Object.entries(src.custom||{})) if((!st.custom[n]||st.custom[n].forgotten)&&!D.dishes.includes(n)&&!RX.INFO[n]){ st.custom[n]={...(st.custom[n]||{}),...c}; delete st.custom[n].forgotten; ch=true; }
+  st.ttime=st.ttime||{}; for(const [n,t] of Object.entries(src.times||{})) if(!st.ttime[n]&&t&&t.m>0){ st.ttime[n]={m:+t.m,pre:!!t.pre,v:+t.v||1}; ch=true; }
   const del=src.del||{};
   for(const vid of del.vids||[]) if(!R.vids.includes(vid)){ if(!D.vids.includes(vid)){ D.vids.push(vid); ch=true; } if(st.favs.videos[vid]){ _rf(vid); ch=true; } }
   for(const n of del.dishes||[]) if(!R.dishes.includes(n)){ if(!D.dishes.includes(n)){ D.dishes.push(n); ch=true; } if(st.custom[n]&&!st.custom[n].forgotten){ dropDish(n); ch=true; } }
@@ -2002,9 +2137,16 @@ async function api(method,body){
 const FAIL={401:'wrongpass',404:'nofunc',413:'toolarge'};
 const failOf=r=>{ SYNC.code=r.status+(r.j&&r.j.error?' '+r.j.error:'')+(r.j&&r.j.detail?': '+r.j.detail:''); return r.j&&r.j.error==='not_set_up'?'notsetup':(FAIL[r.status]||'error'); };
 /* remote edits to items both sides have: take them when this browser hasn't changed that item since the last sync */
-function takeRemoteEdits(r){ const b=base(); if(!b) return false; let ch=false; const loc=masterData();
+function takeRemoteEdits(r){ const b=base()||MD; if(!b) return false; let ch=false; const loc=masterData();
   for(const [k,v] of Object.entries(r.custom||{})){ const bv=(b.custom||{})[k]; if(st.custom[k]&&loc.custom[k]&&bv&&stable(bv)!==stable(v)&&stable(loc.custom[k])===stable(bv)){ Object.assign(st.custom[k],v); ch=true; } }
   for(const [kind,obj] of [['favDishes',st.favDishes],['videos',st.favs.videos]]) for(const [k,v] of Object.entries(r[kind]||{})){ const bv=(b[kind]||{})[k]; if(obj[k]&&bv&&stable(bv)!==stable(v)&&stable(obj[k])===stable(bv)){ obj[k]={...v}; ch=true; } }
+  // unfavourited elsewhere: the favourite is gone from the store but unchanged here
+  for(const [k,bv] of Object.entries(b.favDishes||{})) if(!(r.favDishes||{})[k]&&st.favDishes[k]&&stable(st.favDishes[k])===stable(bv)&&(r.videos||{})[bv.vid]){ delete st.favDishes[k]; if(st.custom[k]) st.custom[k].fav=false; ch=true; }
+  // hidden dishes: take what others hid or un-hid since the last sync
+  const bh=new Set(b.hidden||[]), rh=new Set(r.hidden||[]); const h=new Set(st.hidden);
+  for(const n of rh) if(!bh.has(n)&&!h.has(n)){ h.add(n); ch=true; }
+  for(const n of bh) if(!rh.has(n)&&h.has(n)){ h.delete(n); ch=true; }
+  if(ch) st.hidden=[...h];
   return ch; }
 async function syncNow(){
   if(!ONLINE){ SYNC.state='local'; return paint(); }
@@ -2084,6 +2226,110 @@ window.MY_DISHES=${JSON.stringify(data,null,1)};
   const blob=new Blob([js],{type:'text/javascript'}); const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download='my-dishes.js'; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
   st.masterSaved={at:data.savedAt,videos:Object.keys(data.videos).length,dishes:Object.keys(data.custom).length}; save(); }
+
+/* ---------- Manage dishes: unfavourite, delete, hide ----------
+   Unfavourite: the ★ goes, the dish and its video stay (the video is still its recipe link).
+   Delete dish (own dishes): the dish and its videos go, on every device.
+   Remove videos (master-list dishes): the favourite videos go, the dish stays in the master list.
+   Hide (master-list dishes): never shown in searches, suggestions, Meal combinations or new weeks.
+   Dishes already placed in a week stay there. Everything is shared like other favourites. */
+const isHidden=n=>(st.hidden||[]).includes(n);
+NL.isHidden=isHidden;
+{ const _s=suggest; suggest=function(...a){ return _s.apply(this,a).filter(x=>x.own||!isHidden(x.n)); }; }
+for(const k of ['rank','rankAdd']){ const f=RX[k]; if(typeof f==='function') RX[k]=function(...a){ const r=f.apply(this,a);
+  if(r&&Array.isArray(r.items)&&st.hidden.length){ const drop=r.items.filter(x=>isHidden(x.name)); r.items=r.items.filter(x=>!isHidden(x.name)); if(r.counts) drop.forEach(x=>{ if(r.counts[x.cat]) r.counts[x.cat]--; }); } return r; }; }
+{ const _c=combosFor; combosFor=function(...a){ const out=_c.apply(this,a); return st.hidden.length?out.filter(c=>!c.some(isHidden)):out; }; }
+{ const _sc=slotCandidates; slotCandidates=function(...a){ const m=_sc.apply(this,a); for(const n of st.hidden) m.delete(n); return m; }; }
+{ const _g=generateWeek; generateWeek=function(pool,o){ if(!st.hidden.length) return _g(pool,o);
+  const roles=Object.fromEntries(Object.entries(pool.roles).map(([r,ds])=>{ const k=ds.filter(d=>!isHidden(d)); return [r,k.length?k:ds]; }));
+  return _g({...pool,roles},o); }; }
+
+const MG={q:'',f:'all',n:40,confirm:'',edit:''};
+const vidsOf=n=>Object.entries(st.favs.videos).filter(([,v])=>v.dish===n&&!v.removed);
+let mgRows=[];
+function mgList(){
+  const q=NL.norm(MG.q); const names=new Set([...Object.keys(st.favDishes), ...ownList(), ...Object.values(st.favs.videos).filter(v=>!v.removed).map(v=>v.dish), ...st.hidden]);
+  if(q.length>=2) for(const n in RX.INFO) if(NL.norm(n).includes(q)) names.add(n);
+  return [...names].filter(n=>(RX.INFO[n]||(st.custom[n]&&!st.custom[n].forgotten))&&(!q||NL.norm(n).includes(q)))
+    .filter(n=>MG.f==='all'?!isHidden(n)||q:MG.f==='fav'?!!st.favDishes[n]:MG.f==='own'?isOwn(n):MG.f==='hidden'?isHidden(n):true)
+    .sort((a,b)=>a.localeCompare(b)); }
+function mgRow(n,i){ const own=isOwn(n), fav=!!st.favDishes[n], nv=vidsOf(n).length, hid=isHidden(n), c=MG.confirm===n;
+  if(MG.edit===n) return `<li class="sp-item mg-edit"><div style="flex:1;min-width:200px;display:grid;gap:6px"><label class="lbl" for="mg-new">New name</label><input id="mg-new" value="${esc(n)}" maxlength="60" autocomplete="off" data-i="${i}"><span class="fod" id="mg-hint" style="font-size:12.5px"></span></div>
+    <div class="sp-acts"><button type="button" class="btn sm" data-mg="rename" data-i="${i}">Save</button><button type="button" class="btn sec sm" data-mg="cancel" data-i="${i}">Cancel</button></div></li>`;
+  const kind=own?'Your dish':'Master list'; const meta=[kind,nv?`${nv} video${nv>1?'s':''}`:'no video',hid?'hidden':''].filter(Boolean).join(' · ');
+  const b=(act,txt,cls='')=>`<button type="button" class="btn sec sm${cls}" data-mg="${act}" data-i="${i}">${txt}</button>`;
+  return `<li class="sp-item${hid?' mg-hid':''}"><div><b>${fav?'<span class="mg-star" aria-label="Favourite">★</span> ':''}${esc(n)}</b><span>${esc(meta)}</span></div><div class="sp-acts">
+    ${own?b('edit','Rename'):''}${nv?(fav?b('unfav','Unfavourite'):b('fav','★ Favourite')):''}
+    ${own?b('del',c?'Tap again to delete':'Delete dish',c?' mg-danger':''):nv?b('rmv',c?'Tap again to remove':'Remove videos',c?' mg-danger':''):''}
+    ${RX.INFO[n]?(hid?b('unhide','Show again'):b('hide','Hide')):''}</div></li>`; }
+function mgDraw(msg){ const el=$('mg-list'); if(!el) return; mgRows=mgList();
+  const cnt={all:null,fav:Object.keys(st.favDishes).length,own:ownList().length,hidden:st.hidden.length};
+  document.querySelectorAll('#mg-f .chip').forEach(c=>{ c.setAttribute('aria-pressed',c.dataset.f===MG.f); const k=c.querySelector('.n'); if(k&&cnt[c.dataset.f]!=null) k.textContent=cnt[c.dataset.f]; });
+  el.innerHTML=mgRows.slice(0,MG.n).map(mgRow).join('')||`<li class="fod" style="list-style:none">${MG.q?'No dishes match.':MG.f==='hidden'?'No hidden dishes.':'Nothing here yet.'}</li>`;
+  $('mg-more').hidden=mgRows.length<=MG.n; $('mg-more').textContent=`Show more (${mgRows.length-MG.n} left)`;
+  if(msg!=null) $('mg-status').textContent=msg;
+  const inp=$('mg-new'); if(inp){ inp.focus(); inp.select(); const hint=()=>{ const t=renameTarget(MG.edit,inp.value); $('mg-hint').textContent=t.err||(t.join?`Joins the ${t.master?'master-list':'your'} dish “${t.name}”: its videos are added there.`:t.like&&t.like.length?`Similar: ${t.like.join(', ')}. Type one of those names exactly to join it.`:''); }; inp.oninput=hint; hint();
+    inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); mgAct('rename',MG.edit); } else if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); mgAct('cancel',MG.edit); } }; } }
+function openManage(){
+  MG.confirm=''; MG.edit=''; MG.n=40;
+  NL.dlg('Manage dishes','Your dishes and favourite recipe videos',`
+   <p class="fod" style="font-size:12.5px;margin:0"><b>Unfavourite</b> removes the ★ and keeps the dish and its video. <b>Delete dish</b> removes your own dish and its videos. <b>Hide</b> keeps a master-list dish out of searches and suggestions. Dishes already in a week stay there. Changes reach your other devices.</p>
+   <input id="mg-q" type="search" placeholder="Search your dishes, or any master-list dish to hide" autocomplete="off" value="${esc(MG.q)}">
+   <div class="rp-row" id="mg-f" role="group" aria-label="Show">${[['all','All'],['fav','★ Favourites'],['own','Your dishes'],['hidden','Hidden']].map(([f,t])=>`<button type="button" class="chip" data-f="${f}" aria-pressed="${MG.f===f}">${t}${f==='all'?'':' <span class="n"></span>'}</button>`).join('')}</div>
+   <p class="rp-status" id="mg-status" role="status" aria-live="polite"></p>
+   <ul class="sp-list" id="mg-list"></ul>
+   <div class="rp-row"><button type="button" class="btn sec sm" id="mg-more" hidden></button><button type="button" class="linkbtn" id="mg-back">← Back to Favourites</button></div>`);
+  $('mg-q').oninput=e=>{ MG.q=e.target.value; MG.n=40; MG.confirm=''; mgDraw(''); };
+  $('mg-f').onclick=e=>{ const c=e.target.closest('.chip'); if(!c) return; MG.f=c.dataset.f; MG.n=40; MG.confirm=''; mgDraw(''); };
+  $('mg-more').onclick=()=>{ MG.n+=40; mgDraw(); };
+  $('mg-back').onclick=()=>favMain();
+  $('mg-list').onclick=e=>{ const b=e.target.closest('button[data-mg]'); if(b) mgAct(b.dataset.mg,mgRows[+b.dataset.i]); };
+  mgDraw(''); }
+NL.openManage=openManage;
+/* ---------- Rename (own dishes) ----------
+   A new name that matches another dish (master list or your own, any letter case) joins it:
+   the videos move there and the old own dish goes. Weeks, saved plans, checks and ingredients follow the new name. */
+function renameTarget(old,raw){ const name=String(raw||'').replace(/\s+/g,' ').trim().slice(0,60);
+  if(!name) return {err:'Type a name.'}; if(name===old) return {same:true,name};
+  const m=Object.keys(RX.INFO).find(x=>SIM.same(x,name)); if(m) return {name:m,join:true,master:true};
+  const o=ownList().find(x=>x!==old&&SIM.same(x,name)); if(o) return {name:o,join:true};
+  const sim=SIM.find(name,allDishNames().filter(x=>x!==old),3).filter(h=>h.kind==='same'||h.score>=0.67);
+  return {name,like:sim.map(h=>h.n)}; }
+function swapName(v,a,b){ if(v===a) return b; if(Array.isArray(v)) return v.map(x=>swapName(x,a,b));
+  if(v&&typeof v==='object'){ const o={}; for(const [k,x] of Object.entries(v)) o[k===a?b:k]=swapName(x,a,b); return o; } return v; }
+function renameDish(old,raw){ const t=renameTarget(old,raw); if(t.err||t.same) return t; const nw=t.name;
+  vidsOf(old).concat(Object.entries(st.favs.videos).filter(([,v])=>v.dish===old&&v.removed)).forEach(([,v])=>{ v.dish=nw; });
+  const f=st.favDishes[old]; delete st.favDishes[old]; if(f&&!st.favDishes[nw]) st.favDishes[nw]=f;
+  const c=st.custom[old];
+  if(!t.master){ st.custom[nw]=t.join?{...st.custom[nw],fav:!!(st.custom[nw].fav||c.fav),link:st.custom[nw].link||c.link,slots:[...new Set([...(st.custom[nw].slots||[]),...(c.slots||[])])]}:{...c}; delete st.custom[nw].forgotten;
+    try{ Store.putDish(nw,st.custom[nw]).catch(()=>{}); }catch(e){} }
+  delete st.custom[old]; try{ Store.delDish(old).catch(()=>{}); }catch(e){}
+  if(!st.masterDel.dishes.includes(old)) st.masterDel.dishes.push(old); st.masterRev.dishes=st.masterRev.dishes.filter(x=>x!==old);
+  st.weeks=st.weeks.map(w=>swapName(w,old,nw));
+  try{ const ps=JSON.parse(localStorage.getItem('lf-saved-v1')||'[]'); localStorage.setItem('lf-saved-v1',JSON.stringify(ps.map(p=>({...p,week:swapName(p.week,old,nw)})))); }catch(e){}
+  if(st.ingr&&st.ingr[old]&&!st.ingr[nw]) st.ingr[nw]=st.ingr[old]; if(st.ingr) delete st.ingr[old];
+  for(const k of ['suit','gsuit']) if(st[k]) for(const key of Object.keys(st[k])) if(key.startsWith(old+'|')){ const nk=nw+key.slice(old.length); if(!st[k][nk]) st[k][nk]=st[k][key]; delete st[k][key]; }
+  return t; }
+NL.renameDish=renameDish;
+function mgAct(act,n){ if(!n) return; let msg='';
+  if(act==='edit'){ MG.edit=n; MG.confirm=''; return mgDraw(''); }
+  if(act==='cancel'){ MG.edit=''; return mgDraw(''); }
+  if(act==='rename'){ const v=($('mg-new')||{}).value; const t=renameDish(n,v); if(t.err){ $('mg-hint').textContent=t.err; return; }
+    MG.edit=''; if(t.same) return mgDraw('');
+    if(MG.q&&!NL.norm(t.name).includes(NL.norm(MG.q))){ MG.q=''; const q=$('mg-q'); if(q) q.value=''; }
+    save(); render(); if(typeof renderLib==='function'&&LIB.open) renderLib();
+    return mgDraw(t.join?`“${n}” joined “${t.name}”.`:`Renamed to “${t.name}”.`); }
+  if((act==='del'||act==='rmv')&&MG.confirm!==n){ MG.confirm=n; return mgDraw(''); }
+  MG.confirm='';
+  if(act==='unfav'){ vidsOf(n).forEach(([,v])=>{ v.unfav=true; }); delete st.favDishes[n]; if(st.custom[n]) st.custom[n].fav=false; msg=`${n}: no longer a favourite. Its video stays as the recipe link.`; }
+  else if(act==='fav'){ const vs=vidsOf(n); if(!vs.length) return; vs.forEach(([,v])=>{ delete v.unfav; }); const [vid,v]=vs[0]; st.favDishes[n]={video:vurl(vid),vid,title:v.title}; if(st.custom[n]) st.custom[n].fav=true; msg=`★ ${n} is a favourite again.`; }
+  else if(act==='rmv'){ vidsOf(n).forEach(([vid])=>removeFavourite(vid)); delete st.favDishes[n]; msg=`Removed the videos for ${n}. The dish stays in the master list.`; }
+  else if(act==='del'){ vidsOf(n).forEach(([vid])=>removeFavourite(vid)); delete st.favDishes[n];
+    if(!st.masterDel.dishes.includes(n)) st.masterDel.dishes.push(n); st.masterRev.dishes=st.masterRev.dishes.filter(x=>x!==n); dropDish(n); msg=`Deleted ${n}.${usedInWeeks(n)?' It stays in the meals that already have it.':''}`; }
+  else if(act==='hide'){ if(!isHidden(n)) st.hidden.push(n); msg=`${n} is hidden from searches and suggestions.`; }
+  else if(act==='unhide'){ st.hidden=st.hidden.filter(x=>x!==n); msg=`${n} shows again.`; }
+  if(act==='hide'||act==='unhide') LIB.cache={};
+  save(); render(); if(typeof renderLib==='function'&&LIB.open) renderLib(); mgDraw(msg); }
 
 /* ---------- Step 4: Check for family (badges per member, guest G badge, View as) ----------
    Order of strictness: allergy/strict diet (⚠) > not suitable (✕) > limited portion (•) > unsure (?) > suits (✓).
@@ -2214,7 +2460,7 @@ function localTargets(texts,keys){ // no-AI fallback: slot and day words
   const t=texts.join(' ').toLowerCase(); const slots=SLOTWORDS.filter(([,rx])=>rx.test(t)).map(x=>x[0]); const days=DAYS.map((d,i)=>new RegExp('\\b'+d.toLowerCase()+'|\\b'+d.slice(0,3).toLowerCase()+'\\b').test(t)?i:-1).filter(i=>i>=0);
   if(!slots.length&&!days.length) return keys; return keys.filter(k=>{ const [d,s]=k.split('|'); return (!slots.length||slots.includes(s))&&(!days.length||days.includes(+d)); }); }
 async function pickTargets(w,m,keys,days,signal){
-  const reqs=[]; if(m.week.suggest) reqs.push(['week','Week box',m.week.suggest,keys]);
+  const reqs=[]; // the week box holds Regenerate week's requirements: preferences for every meal, not a choice of which meals to fill
   for(const d of days){ if(m.days[d].suggest) reqs.push(['day'+d,`Day box (${DAYS[d]})`,m.days[d].suggest,keys.filter(k=>+k.split('|')[0]===d)]); }
   const mealKeys=keys.filter(k=>(m.meals[k]||{}).suggest);
   if(!reqs.length) return {keys:mealKeys.length?mealKeys:keys,all:!mealKeys.length};
@@ -2241,17 +2487,17 @@ NL.fill=async function(scope,statusEl){
   let targets=[]; if(scope.meals) targets=scope.meals.map(([d,s])=>[+d,s]).filter(([d,s])=>scope.replace||!w.days[d][s].length);
   else for(const d of scope.days) for(const [s] of SLOTS) if(!w.days[d][s].length) targets.push([d,s]);
   if(!targets.length){ say('Nothing to fill: those meals already have dishes. Use a meal\'s ⚙ → “Suggest again” to replace one, or clear them first.'); return; }
-  if(!scope.meals){ say('Reading your suggest boxes…');
+  if(!scope.meals&&!scope.all){ say('Reading your suggest boxes…');
     try{ const r=await pickTargets(w,m,targets.map(([d,s])=>d+'|'+s),[...new Set(targets.map(t=>t[0]))]);
       targets=r.keys.map(k=>{ const [d,s]=k.split('|'); return [+d,s]; }); save(); }
     catch(e){ say(NL.aiErr(e),true); return; }
     if(!targets.length){ say('Your suggest boxes don\'t ask for any of the empty meals here. Name the meal or day (for example “idli for breakfast”), or clear the box to fill everything.'); return; } }
-  NL.weekUndo();
+  if(!scope.noUndo) NL.weekUndo();
   if(!NL.aiOn()){ const n=fallbackFill(w,targets); save(); render(); say(`Gemini isn't set up, so ${n} meal${n===1?' was':'s were'} filled from the planner's meal patterns.`); return; }
   const wk=m.week; const novelty=wk.novelty||'mix';
   const wantsNew=novelty==='new'||/\bnew\b|try something|different|never (made|cooked)|not in (the|my) list/i.test([wk.suggest,...m.days.map(x=>x.suggest||''),...Object.values(m.meals).map(x=>x.suggest||'')].join(' '));
   const days=[...new Set(targets.map(t=>t[0]))];
-  const placed=[]; let understoodSet=!scope.meals;
+  const placed=[]; let understoodSet=!scope.meals&&!scope.all;
   try{
     for(let i=0;i<days.length;i+=2){ const dChunk=days.slice(i,i+2); const tg=targets.filter(t=>dChunk.includes(t[0]));
       say(`Suggesting ${tg.length} meal${tg.length>1?'s':''} for ${dChunk.map(d=>DAYS[d]).join(' and ')}…`);
@@ -2295,12 +2541,109 @@ Reply with JSON only:
       save(); render(); }
     say(placed.length?`Filled ${placed.length} meal${placed.length>1?'s':''}. Use ⇄ to replace any dish, or Undo.`:'Gemini didn\'t return usable dishes. Try rewording the suggest box.',!placed.length);
     if(placed.length){ NL.closeDlg(); showToast(`Filled ${placed.length} meal${placed.length>1?'s':''} from your suggestions. Undo is here if you don't like them.`); }
-  }catch(e){ say(NL.aiErr(e),true); if(!placed.length) undo.pop(); }
+  }catch(e){ say(NL.aiErr(e),true); if(!placed.length&&!scope.noUndo) undo.pop(); }
 };
 /* New ideas get a dashed outline until you keep them (they're saved as your dishes) */
 NL.after(()=>{ const w=st.weeks[st.idx]; document.querySelectorAll('li[data-c]').forEach(li=>{ const [d,s,i]=li.dataset.c.split('|'); const n=(w.days[+d][s]||[])[+i]; const c=n&&(st.custom||{})[n];
   if(c&&c.idea){ li.classList.add('idea'); const dn=li.querySelector('.dn'); dn.insertAdjacentHTML('beforeend',`<button type="button" class="ideatag" data-keep-idea="${esc(n)}" title="Keep this as one of your dishes">New idea · keep</button>`); } }); });
 document.addEventListener('click',e=>{ const b=e.target.closest('[data-keep-idea]'); if(!b) return; e.preventDefault(); const n=b.dataset.keepIdea; if(st.custom[n]){ delete st.custom[n].idea; st.custom[n].note=st.custom[n].note==='New idea from Suggest'?'':st.custom[n].note; Store.putDish(n,st.custom[n]).catch(()=>{}); save(); render(); showToast(`Kept “${n}” as your dish.`); $('toast-undo').hidden=true; } });
+
+/* ---------- Cooking time: filter Meal combinations, and keep Suggest within the time ----------
+   The master list has no cooking times, so Gemini estimates them once per dish (cached in st.ttime).
+   "m" = minutes of hands-on + cooking; "pre" = needs something made well ahead (fermented batter,
+   overnight soaking, long marinating). A dish fits a limit when m ≤ limit and pre is false.
+   Suggest (meal ⚙, day 👥, Suggest week) reads the boxes for a meal and a time — "evening snack in 15 mins" —
+   and opens Meal combinations on that meal with the time filter set. The meal's own "Time to cook" counts too. */
+st.ttime=st.ttime||{}; const TT_V=1;
+LIB.time=null; LIB.tstate=''; LIB.terr='';
+const tOf=n=>{ const e=st.ttime[n]; return e&&e.v===TT_V?e:null; };
+const fitsTime=(n,max)=>{ const t=tOf(n); return !!t&&!t.pre&&t.m<=max; };
+const slotHasBit=(n,slot)=>{ const I=RX.INFO[n]; return !!I&&(!!(I.bits&NL.SLOTBIT[slot])||(slot==='nightDrink'&&I.cuisine==='Drink')); };
+const dietOkWeek=(n,w)=>{ const I=RX.INFO[n]; return !I||!((w.fishMeat===false&&I.nonveg)||(w.eggs===false&&I.egg)); };
+function slotDishes(slot){ const w=st.weeks[st.idx]; const set=new Set();
+  combosFor(slot,w.fishMeat,w.eggs).forEach(c=>c.forEach(n=>set.add(n)));
+  favListForSlot(slot).concat(ownForSlot(slot)).forEach(n=>set.add(n));
+  for(const n in RX.INFO) if(slotHasBit(n,slot)&&!NL.isHidden(n)&&dietOkWeek(n,w)) set.add(n);
+  return [...set]; }
+let ttRun=null;
+async function ensureTimes(names,say,signal){
+  const miss=[...new Set(names)].filter(n=>!tOf(n)); if(!miss.length) return 0; if(!NL.aiOn()) throw {code:'not_configured'};
+  for(let i=0;i<miss.length;i+=100){ if(signal&&signal.aborted) throw {code:'cancelled'}; const chunk=miss.slice(i,i+100);
+    say&&say(`Checking cooking times… ${Math.min(i+100,miss.length)} of ${miss.length} dishes`);
+    const out=await NL.ai(`Estimate how long each home-cooked dish takes to make for a family of 3–4 (Indian home cooking unless the name says otherwise).
+"m": minutes of hands-on plus cooking time, starting from ingredients normally kept at home.
+"pre": true if it ALSO needs something prepared well ahead — fermented batter, overnight soaking, long marinating, dough resting over 30 minutes; otherwise false. When pre is true, "m" is the time once that is ready.
+Drinks and fruit: the time to make, cut or pour. Be realistic for an ordinary home kitchen.
+Reply with JSON only: {"t":[{"n":<dish number>,"m":<minutes>,"pre":false}]}
+Dishes (number | name | serving note | recipe note):
+${chunk.map((n,k)=>{ const I=RX.INFO[n]||{}; const c=(st.custom||{})[n]||{}; return `${k+1} | ${n} | ${(I.portion||'').slice(0,70)} | ${(I.note||c.note||'').slice(0,70)}`; }).join('\n')}`,{maxTokens:8192,signal,temperature:0.2});
+    for(const x of (out&&out.t)||[]){ const n=chunk[(+x.n)-1]; const m=Math.round(+x.m); if(!n||!(m>0)) continue; st.ttime[n]={m:Math.min(m,600),pre:!!x.pre,v:TT_V}; }
+    save(); }
+  return miss.length; }
+/* fetch the times the current Meal combinations tab needs, then redraw */
+NL.timeEnsure=async()=>{ if(!LIB.time) return; const slot=LIB.slot; const need=slotDishes(slot).filter(n=>!tOf(n));
+  if(!need.length){ LIB.tstate='ok'; return renderLib(); }
+  if(ttRun&&ttRun.slot===slot) return ttRun.p;
+  if(ttRun) ttRun.ac.abort();
+  const ac=new AbortController(); LIB.tstate='busy'; LIB.terr=''; renderLib();
+  const p=(async()=>{ try{ await ensureTimes(need,t=>{ LIB.tmsg=t; const el=$('lib-count'); if(el&&LIB.slot===slot) el.textContent=t; },ac.signal); LIB.tstate='ok'; }
+    catch(e){ if(e&&e.code==='cancelled') return; LIB.tstate='err'; LIB.terr=NL.aiErr(e); }
+    finally{ if(ttRun&&ttRun.ac===ac) ttRun=null; renderLib(); } })();
+  ttRun={slot,ac,p}; return p; };
+
+/* Meal combinations: time filter */
+{ const _l=libList; libList=function(){ const list=_l(); const max=LIB.time; if(!max) return list;
+  const pool=slotDishes(LIB.slot); if(pool.some(n=>!tOf(n))) return list; // times not ready: show everything, the count line says why
+  const ownRows=list.slice(0,LIB.ownN).filter(c=>c.every(n=>fitsTime(n,max))); const combos=list.slice(LIB.ownN).filter(c=>c.every(n=>fitsTime(n,max)));
+  const seen=new Set([...ownRows,...combos].flat()); const w=st.weeks[st.idx];
+  const ts=LIB.q.toLowerCase().split(/[,+]/).map(t=>t.trim()).filter(Boolean);
+  const extra=Object.keys(RX.INFO).filter(n=>!seen.has(n)&&slotHasBit(n,LIB.slot)&&!NL.isHidden(n)&&dietOkWeek(n,w)&&fitsTime(n,max)&&ts.every(t=>n.toLowerCase().includes(t)))
+    .sort((a,b)=>tOf(a).m-tOf(b).m||a.localeCompare(b)).map(n=>[n]);
+  LIB.ownN=ownRows.length; LIB.extraN=extra.length; return ownRows.concat(combos,extra); }; }
+{ const _c=chip; chip=function(d,ci,j){ const h=_c(d,ci,j); const t=LIB.time&&tOf(d); if(!t) return h; const i=h.lastIndexOf('</button>');
+  return h.slice(0,i)+`<small class="tmin" aria-label="about ${t.m} minutes">${t.m}′</small>`+h.slice(i); }; }
+{ const _r=renderLib; renderLib=function(){ _r(); const sel=$('lib-time'); if(sel) sel.value=LIB.time?String(LIB.time):''; const lb=$('lib'); if(lb) lb.classList.toggle('timed',!!LIB.time);
+  if(!LIB.time) return; const c=$('lib-count'); if(!c) return;
+  if(LIB.tstate==='busy') c.textContent=LIB.tmsg||'Checking cooking times…';
+  else if(LIB.tstate==='err') c.textContent=`Couldn't check cooking times (${LIB.terr}) — showing all. `;
+  else if(slotDishes(LIB.slot).some(n=>!tOf(n))) { c.textContent='Checking cooking times…'; NL.timeEnsure(); }
+  else { c.textContent=`⏱ Within ${LIB.time} min (Gemini estimates) · `+c.textContent+(LIB.extraN?` · more dishes from the master list at the end`:'');
+    if(!LIB.list.length){ $('lib-rows').innerHTML=`<li class="lempty">No ${slotLabel(LIB.slot).toLowerCase()} dishes${LIB.q?` with “${esc(LIB.q)}”`:''} within ${LIB.time} minutes. Try a longer time.</li>`; } } }; }
+/* time picker next to "Find combos with…" */
+{ const q=document.querySelector('#lib .lib-q'); if(q){ q.insertAdjacentHTML('afterend',`<div class="fld lib-t"><label class="vh" for="lib-time">Time to make</label><select id="lib-time" title="Only dishes that can be made within this time"><option value="">⏱ Any time</option>${[10,15,20,30,45,60].map(m=>`<option value="${m}">⏱ ≤ ${m} min</option>`).join('')}</select></div>`);
+  $('lib-time').onchange=e=>{ LIB.time=+e.target.value||null; LIB.shown=24; LIB.tstate=''; renderLib(); if(LIB.time) NL.timeEnsure(); }; } }
+document.addEventListener('click',e=>{ const t=e.target.closest('#lib-tabs .ltab'); if(t&&LIB.time) setTimeout(()=>NL.timeEnsure(),0); });
+
+/* Suggest: read meal + time from the boxes, keep candidates within the time, open Meal combinations filtered */
+const SLOT_EXPLICIT=[['eveningSnack',/evening snack|tea.?time snack|snack for (the )?evening/],['morningSnack',/morning snack|mid.?morning/],['morningDrink',/morning drink/],['nightDrink',/night drink|bedtime drink/],
+  ['lunchPacked',/pack(ed)? lunch|lunch ?box|lunch pack|office lunch|school lunch/],['breakfast',/breakfast/],['dinner',/dinner|supper/],['homeLunch',/\blunch\b/],['eveningSnack',/\bsnacks?\b/]];
+function minutesIn(t){ t=String(t||'').toLowerCase(); let m;
+  if((m=t.match(/(\d{1,3})\s*(?:-|–|to)\s*(\d{1,3})\s*(?:m|mins?|minutes?)\b/))) return +m[2];
+  if((m=t.match(/(\d{1,3})\s*(?:m|mins?|minutes?)\b/))) return +m[1];
+  if(/half an? hour|half hour/.test(t)) return 30; if(/\b(an|one|1)\s*(hour|hr)\b/.test(t)) return 60;
+  if(/\b(quick|very fast|in a hurry|instant)\b/.test(t)) return 15; return null; }
+function slotIn(t){ t=String(t||'').toLowerCase(); const x=SLOT_EXPLICIT.find(([,rx])=>rx.test(t)); return x?x[0]:null; }
+function readAsk(scope){ const w=st.weeks[st.idx], m=meta(w); let texts, slot=null, d=null;
+  if(scope.meals&&scope.meals.length===1){ d=+scope.meals[0][0]; slot=scope.meals[0][1]; texts=[(m.meals[d+'|'+slot]||{}).suggest,m.days[d].suggest,m.week.suggest]; }
+  else if(scope.days&&scope.days.length===1){ d=scope.days[0]; texts=[...Object.entries(m.meals).filter(([k])=>+k.split('|')[0]===d).map(([,x])=>x.suggest),m.days[d].suggest,m.week.suggest]; }
+  else texts=[m.week.suggest,...m.days.map(x=>x.suggest),...Object.values(m.meals).map(x=>x.suggest)]; // Suggest week: the week box you just wrote comes first
+  texts=texts.filter(Boolean); // for one meal or day: meal box, then day, then week — the first that says something wins
+  if(!slot) for(const t of texts){ slot=slotIn(t); if(slot) break; }
+  let max=null; for(const t of texts){ max=minutesIn(t); if(max) break; }
+  if(!max&&slot&&d!=null){ const tf=+NL.timeFor(w,d,slot); if(tf&&tf<=60) max=tf; }
+  return {slot,max}; }
+NL.readAsk=readAsk;
+NL.timeLimit=null;
+{ const _sc=slotCandidates; slotCandidates=function(w,d,s,...a){ const m=_sc(w,d,s,...a); const L=NL.timeLimit;
+  if(L&&(!L.slot||L.slot===s)) for(const n of [...m.keys()]) if(tOf(n)&&!fitsTime(n,L.max)) m.delete(n);
+  return m; }; }
+{ const _f=NL.fill; NL.fill=async function(scope,statusEl){ const ask=readAsk(scope);
+  if(ask.slot||ask.max){ if(ask.slot) LIB.slot=ask.slot; if(ask.max) LIB.time=ask.max; LIB.open=true; LIB.shown=24; LIB.q=''; const q=$('lib-q'); if(q) q.value=''; saveLib(); renderLib(); }
+  if(ask.max&&NL.aiOn()){ const say=t=>{ if(statusEl) statusEl.textContent=t; };
+    try{ await ensureTimes(slotDishes(ask.slot||LIB.slot),say); }catch(e){ /* times are a nice-to-have for Suggest */ } renderLib(); }
+  NL.timeLimit=ask.max?{slot:ask.slot,max:ask.max}:null;
+  try{ return await _f.call(this,scope,statusEl); }
+  finally{ NL.timeLimit=null; if(ask.slot||ask.max){ renderLib(); const lib=$('lib'); if(lib) setTimeout(()=>lib.scrollIntoView({block:'nearest',behavior:'smooth'}),150); } } }; }
 
 /* ---------- Steps 6–7: ingredient estimates and the Groceries tab ----------
    Ingredients are RAW, as bought (rice and urad dal, never "cooked rice" or "idli batter"), estimated once
@@ -2367,7 +2710,7 @@ function groDialog(msg){
      <span class="gq">${esc(amtTxt(g))}</span><span class="guse">${esc([...new Set(g.parts.flatMap(p=>p.uses))].slice(0,6).join(', '))}</span></li>`;
   const groups=CATS.map(([c,l])=>{ const items=need.filter(g=>g.c===c); return items.length?`<div class="gcat"><span class="lbl">${l} <span class="opt">(${items.length})</span></span><ul class="glist">${items.map(row).join('')}</ul></div>`:''; }).join('');
   const body=NL.dlg('Groceries',`Week ${st.idx+1}${st.weeks[st.idx].savedName?' · '+st.weeks[st.idx].savedName:''} · raw ingredients for each meal's headcount · ${toBuy} to buy`,`
-   <div class="fld"><label class="lbl" for="gro-say">Tell me what you have</label><div class="rp-row"><input id="gro-say" style="flex:1;min-width:180px" placeholder="e.g. I have onion, tomato, rice, apples" autocomplete="off"><button type="button" class="btn sec" id="gro-mic" aria-label="Speak" title="Speak">🎤</button><button type="button" class="btn" id="gro-apply">Tick</button></div></div>
+   <div class="fld"><label class="lbl" for="gro-say">Tell me what you have</label><div class="rp-row"><input id="gro-say" style="flex:1;min-width:180px" placeholder="e.g. I have onion, tomato, rice, apples" autocomplete="off"><button type="button" class="btn sec" id="gro-mic" aria-label="Speak" title="Speak">🎤</button><button type="button" class="btn" id="gro-apply">Tick</button></div><p class="fod" id="gro-hint" style="font-size:12.5px;margin:4px 0 0" hidden>🎤 Tap the mic and list what you have. Say <b>“that's all”</b> (or “done”) when you finish, or tap the mic again.</p></div>
    <p class="rp-status" id="gro-status" role="status" aria-live="polite">${msg?esc(msg):''}</p>
    ${missing.length?`<div class="gmiss"><span>${missing.length} dish${missing.length>1?'es need':' needs'} an ingredient estimate${NL.aiOn()?'':' (Gemini isn\'t set up)'}.</span> <button type="button" class="btn sm" id="gro-est">Estimate ingredients</button><button type="button" class="btn sec sm" id="gro-stop" hidden>Stop</button></div>`:''}
    ${need.length?`<p class="fod" style="font-size:12.5px;margin:0">Tick what you already have. Unticked items are what you need to buy.</p>${groups}`:'<p class="fod">Nothing yet. Add dishes to the week, then estimate ingredients.</p>'}
@@ -2382,15 +2725,34 @@ function groDialog(msg){
   $('gro-apply').onclick=()=>applySay($('gro-say').value,list);
   $('gro-say').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); applySay($('gro-say').value,list); } };
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition; const mic=$('gro-mic');
-  if(!SR) mic.hidden=true; else mic.onclick=()=>{ try{ const r=new SR(); r.lang=navigator.language||'en-IN'; r.interimResults=false;
-    r.onresult=e=>{ const t=e.results[0][0].transcript; $('gro-say').value=t; applySay(t,list); }; r.onerror=()=>{ $('gro-status').textContent='Couldn\'t hear that. Check microphone permission, or type instead.'; };
-    $('gro-status').textContent='Listening…'; r.start(); }catch(e){ $('gro-status').textContent='Voice input isn\'t available here.'; } };
+  if(!SR) mic.hidden=true; else { $('gro-hint').hidden=false; mic.onclick=()=>NL.groVoice&&NL.groVoice.on?NL.groVoice.finish():startVoice(SR,list); }
   $('gro-keep').onclick=async()=>{ const t=groText(); if(!t){ $('gro-status').textContent='Everything is ticked: nothing to buy.'; return; }
     try{ await navigator.clipboard.writeText(t); $('gro-status').textContent=`Copied ${t.split('\n').length} items. Paste into a Keep note, then ⋮ → Show checkboxes.`; }
     catch(e){ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); $('gro-status').textContent='Copied.'; }catch(_){ $('gro-status').textContent='Copy blocked by the browser.'; } ta.remove(); } };
   const sh=$('gro-share'); if(sh) sh.onclick=()=>{ const t=groText(); if(t) navigator.share({title:'Groceries',text:t}).catch(()=>{}); };
   $('gro-ing').onclick=()=>ingDialog();
 }
+/* Voice: keeps listening through pauses until you say a done phrase ("that's all", "done", "finished",
+   "stop listening") or tap the mic again, then ticks everything you said. Gives up after 2 minutes. */
+const DONE_RX=/\b(that'?s all|that is all|that'?s it|that is it|i'?m done|i am done|all done|done|finished|stop listening)\b[\s.!]*$/i;
+function startVoice(SR,list){ const V={on:true,text:'',live:'',r:null,t0:Date.now()}; NL.groVoice=V;
+  const inp=$('gro-say'), mic=$('gro-mic'), S=t=>{ const e=$('gro-status'); if(e) e.textContent=t; };
+  const ui=()=>{ if(mic){ mic.textContent=V.on?'■':'🎤'; mic.classList.toggle('listening',V.on); mic.setAttribute('aria-label',V.on?'Stop listening':'Speak'); } };
+  const said=()=>(V.text+' '+V.live).replace(/\s+/g,' ').trim();
+  V.finish=()=>{ if(!V.on) return; V.on=false; try{ V.r&&V.r.stop(); }catch(e){} ui();
+    const t=said().replace(DONE_RX,'').replace(/[\s,.]+$/,'').trim(); NL.groVoice=null;
+    if(!t){ S('Didn\'t catch any items. Tap the mic and try again, or type them.'); return; }
+    if(inp) inp.value=t; applySay(t,list); };
+  const listen=()=>{ const r=new SR(); V.r=r; r.lang=navigator.language||'en-IN'; r.continuous=true; r.interimResults=true;
+    r.onresult=e=>{ let live=''; for(let i=e.resultIndex;i<e.results.length;i++){ const x=e.results[i]; if(x.isFinal) V.text+=' '+x[0].transcript; else live+=x[0].transcript; }
+      V.live=live; if(inp) inp.value=said(); if(DONE_RX.test(said())) V.finish(); };
+    r.onerror=e=>{ if(e.error==='not-allowed'||e.error==='service-not-allowed'){ V.on=false; NL.groVoice=null; ui(); S('Microphone permission is off. Allow it in the browser, or type instead.'); } };
+    r.onend=()=>{ if(!V.on) return; V.text+=' '+V.live; V.live=''; // the browser stops after a pause: keep listening until the done phrase
+      if(Date.now()-V.t0>120000) return V.finish(); try{ listen(); }catch(e){ V.finish(); } };
+    r.start(); };
+  try{ if(inp) inp.value=''; S('Listening… list what you have, then say “that\'s all”.'); ui(); listen(); }
+  catch(e){ V.on=false; NL.groVoice=null; ui(); S('Voice input isn\'t available here.'); } }
+NL.startVoice=startVoice; NL.DONE_RX=DONE_RX;
 /* "I have onion, tomato, no rice" → tick / untick by name. Amounts are ignored on purpose. */
 function parseLocal(text,list){ const out=[], unmatched=[];
   for(let part of String(text).toLowerCase().split(/,|\band\b|;|\n/)){ part=part.replace(/^\s*(i have|we have|have|got|there is|there are|i've got)\s+/,'').trim(); if(!part) continue;

@@ -30,7 +30,7 @@ export default async (req) => {
     let doc; try { doc = JSON.parse(text); } catch { return json(400, { error: "bad_json" }); }
     const obj = v => v && typeof v === "object" && !Array.isArray(v);
     if (!obj(doc) || doc.version !== 1 || !obj(doc.videos) || !obj(doc.custom) || !obj(doc.favDishes)
-        || !Array.isArray(doc.playlists) || (doc.del && !obj(doc.del))) return json(400, { error: "bad_shape" });
+        || !Array.isArray(doc.playlists) || (doc.del && !obj(doc.del)) || (doc.hidden && !Array.isArray(doc.hidden))) return json(400, { error: "bad_shape" });
     doc.savedAt = new Date().toISOString();
     await store.setJSON("master", doc);
     return json(200, { ok: true, savedAt: doc.savedAt });
