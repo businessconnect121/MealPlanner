@@ -14,7 +14,7 @@ body.mp-on .api-bar{display:none!important}`;
     f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-window.scrollY))+'px'; }
   function show(){
     const v=view(), f=v.querySelector('iframe');
-    if(!f.src) f.src='meal-planner/index.html';
+    if(!f.src) f.src='meal-planner/index.html?v=202610290414'; // new address each release, so no old copy is shown
     body().style.display='none'; const w=welcome(); if(w){ w.dataset.mpPrev=w.style.display; w.style.display='none'; }
     v.hidden=false; document.body.classList.add('mp-on'); document.getElementById('dnav-planner')?.classList.add('active');
     window.scrollTo(0,0); size();
