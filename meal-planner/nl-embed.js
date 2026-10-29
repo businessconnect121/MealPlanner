@@ -14,14 +14,16 @@ body.mp-on .api-bar{display:none!important}`;
     f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-window.scrollY))+'px'; }
   function show(){
     const v=view(), f=v.querySelector('iframe');
-    if(!f.src) f.src='meal-planner/index.html?v=202610290414'; // new address each release, so no old copy is shown
+    if(!f.src) f.src='meal-planner/index.html?v=202610290630'; // new address each release, so no old copy is shown
     body().style.display='none'; const w=welcome(); if(w){ w.dataset.mpPrev=w.style.display; w.style.display='none'; }
     v.hidden=false; document.body.classList.add('mp-on'); document.getElementById('dnav-planner')?.classList.add('active');
+    if(typeof closeDrawer==='function') closeDrawer(); // give the planner the full width, even on desktop
     window.scrollTo(0,0); size();
   }
   function hide(){
     const v=view(); if(!v||v.hidden) return;
     v.hidden=true; document.body.classList.remove('mp-on'); body().style.display=''; const w=welcome(); if(w){ w.style.display=w.dataset.mpPrev||''; }
+    if(window.innerWidth>=768 && typeof openDrawer==='function') openDrawer(); // restore the permanent sidebar on desktop
   }
   // Called at the start of navTo(): handles the planner view and returns true when it did.
   window.mpNav=function(view){ if(view==='planner'){ show(); return true; } hide(); return false; };

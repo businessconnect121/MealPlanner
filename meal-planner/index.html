@@ -228,6 +228,9 @@ li.fav .dn::before{content:"★ ";color:var(--fav);font-size:11px}
 .und{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
 .und-l{font-size:11.5px;color:var(--muted);margin-right:2px}
 .uchip{font-size:12px;background:var(--leaf-bg);color:var(--leaf);border-radius:999px;padding:2px 9px}
+.uchip.warn{background:var(--lim-bg);color:var(--lim);display:inline-flex;align-items:center;gap:5px}
+.uchip.warn .linkbtn{font-size:11.5px;color:inherit;font-weight:700}
+.und-pre{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
 .mpo-body{display:grid;gap:12px}
 /* day/meal decorations */
 .dhc{margin-top:4px}
@@ -239,6 +242,8 @@ li.fav .dn::before{content:"★ ";color:var(--fav);font-size:11px}
 .cl .mopt{width:28px;height:28px}
 .mtag{font-size:11.5px;color:var(--turm);font-weight:600;margin-bottom:4px}
 .cl+.mtag,dd .mtag{display:block}
+.mtag-n{font:inherit;color:inherit;font-weight:inherit;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px}
+.mtag-in{font-size:11.5px;font-weight:600;color:var(--turm);width:38px;border:1px solid var(--turm);border-radius:4px;padding:0 2px;background:var(--bg)}
 /* suitability badges */
 td li{flex-wrap:wrap}
 .sbadges{display:flex;flex-wrap:wrap;gap:3px;flex-basis:100%;order:3;margin:1px 0 3px}
@@ -322,6 +327,9 @@ td.planning,[data-cell].planning{background:linear-gradient(90deg,transparent 0%
 .rowsug{display:block;margin-top:6px;border:0;background:none;padding:0;font:600 11px var(--body);letter-spacing:0;text-transform:none;color:var(--leaf);cursor:pointer;text-align:left}
 .rowsug:hover{text-decoration:underline}.rowsug.set::after{content:' •'}
 .pchip-x{border:0;background:none;padding:0 0 0 4px;cursor:pointer;color:var(--muted);font:inherit}.pchip-x:hover{color:var(--no)}.gempty{display:grid;gap:8px;border:1px dashed var(--line);border-radius:12px;padding:12px}
+#gro-find{width:100%;box-sizing:border-box;padding:8px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--card);color:var(--ink)}
+.mclear{border:0;background:none;padding:2px 4px;font:500 11px var(--body);color:var(--muted);text-decoration:underline;cursor:pointer}.mclear:hover{color:var(--no)}
+.dclear{display:block;border:0;background:none;padding:0;margin:0 0 4px;font:500 11px var(--body);color:var(--muted);text-decoration:underline;cursor:pointer}.dclear:hover{color:var(--no)}
 
 /* Replace action + panel */
 td li{display:flex;align-items:flex-start;gap:6px;justify-content:space-between}
@@ -416,7 +424,7 @@ legend,.lbl{font:600 11px var(--body);letter-spacing:.07em;text-transform:upperc
 .toast[hidden]{display:none}
 .toast button{flex:none;border:1px solid currentColor;background:transparent;color:inherit;border-radius:999px;padding:5px 12px;font-weight:600}
 .toast button[hidden]{display:none}
-@media (max-width:760px){.tablewrap{display:none}.cards{display:grid}.opts{margin-left:0}
+@media (max-width:760px){.opts{margin-left:0} /* always the full table, scrolled sideways — same "one shot" week view as desktop */
  dialog.rpd{width:100%;max-width:100%;margin:auto 0 0;max-height:92vh;border-radius:16px 16px 0 0;border-bottom:0}
  .rp-in{padding:16px 16px max(20px,env(safe-area-inset-bottom,0px))}}
 
@@ -573,22 +581,24 @@ document.addEventListener('DOMContentLoaded',()=>{
   const ref=document.getElementById('plansbtn'); (ref&&ref.parentNode===bar)?ref.after(btn):bar.appendChild(btn);
   const d=document.createElement('dialog'); d.className='rpd'; d.id='settings'; d.setAttribute('aria-labelledby','set-title');
   d.innerHTML=`<div class="rp-in">
-   <div class="rp-top"><div><h2 id="set-title">Backup</h2><p class="rp-orig">Your weeks, saved plans and own dishes</p></div><button type="button" class="rp-x" id="set-x" aria-label="Close">×</button></div>
-   <p class="fod" style="font-size:13px;margin:0">These are stored in this browser. Export a backup now and then. To bring in data from the standalone Meal Planner, use its <b>Settings → Export backup</b>, then <b>Import backup</b> here.</p>
+   <div class="rp-top"><div><h2 id="set-title">Backup</h2><p class="rp-orig">Your weeks, saved plans, own dishes, family profiles and YouTube key</p></div><button type="button" class="rp-x" id="set-x" aria-label="Close">×</button></div>
+   <p class="fod" style="font-size:13px;margin:0">These are stored in this browser only — nothing here syncs between devices on its own. Export a backup now and then, and use <b>Import backup</b> on another device to bring your family's profiles, health conditions and YouTube key over too, instead of re-entering them. To bring in data from the standalone Meal Planner, use its <b>Settings → Export backup</b>, then <b>Import backup</b> here.</p>
    <div class="rp-row"><button type="button" class="btn sec" id="bk-export">Export backup</button><label class="btn sec" style="cursor:pointer">Import backup<input id="bk-import" type="file" accept="application/json,.json" hidden></label></div>
    <div style="border-top:1px solid var(--line);padding-top:10px;display:grid;gap:8px"><span class="lbl">Favourites copy</span>
     <p class="fod" style="font-size:13px;margin:0">Favourite recipe videos and your own dishes save to your Netlify site automatically. To keep a separate copy, download <b>my-dishes.js</b>. Put in the meal-planner folder, it becomes the built-in list.</p>
     <div class="rp-row"><button type="button" class="btn sec" id="ms-save">Save to master (download)</button></div></div>
    <p class="rp-status" id="bk-status" role="status" aria-live="polite"></p>
    <p class="fod" style="font-size:12.5px;margin:0;border-top:1px solid var(--line);padding-top:10px">AI suggestions use the Gemini key and model from NutriLens <b>Settings</b>.</p>
-   <p class="fod" style="font-size:11.5px;margin:0">Planner version 202610290414</p>
+   <p class="fod" style="font-size:11.5px;margin:0">Planner version 202610290630</p>
    </div>`;
   document.body.appendChild(d);
   const $s=id=>document.getElementById(id);
   btn.onclick=()=>{ $s('bk-status').textContent=''; d.showModal(); $s('bk-export').focus(); };
   $s('set-x').onclick=()=>d.close(); d.addEventListener('click',e=>{ if(backdropClick(e,d)) d.close(); });
   $s('bk-export').onclick=()=>{
-    const data={app:'meal-planner',version:1,exportedAt:new Date().toISOString(),state:st,saved:(()=>{try{return JSON.parse(localStorage.getItem('lf-saved-v1')||'[]')}catch(e){return []}})()};
+    const lsJSON=k=>{ try{ const v=localStorage.getItem(k); return v==null?null:JSON.parse(v); }catch(e){ return null; } };
+    const data={app:'meal-planner',version:2,exportedAt:new Date().toISOString(),state:st,saved:(()=>{try{return JSON.parse(localStorage.getItem('lf-saved-v1')||'[]')}catch(e){return []}})(),
+      nutrilens:{profiles:lsJSON('nl_profiles'),ytKey:localStorage.getItem('nl_yt_key')||''}};
     const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'}); const a=document.createElement('a');
     a.href=URL.createObjectURL(blob); a.download=`meal-planner-backup-${new Date().toISOString().slice(0,10)}.json`; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
     $s('bk-status').textContent='Backup downloaded.'; };
@@ -597,7 +607,10 @@ document.addEventListener('DOMContentLoaded',()=>{
       if(!v||v.app!=='meal-planner'||!v.state||!Array.isArray(v.state.weeks)||!v.state.weeks.length||!v.state.weeks.every(w=>Array.isArray(w.days)&&w.days.length===7)) throw 0;
       const s=v.state; s.weeks=s.weeks.slice(-MAX_OPEN); s.idx=Math.min(+s.idx||0,s.weeks.length-1);
       localStorage.setItem(KEY,JSON.stringify(s)); if(Array.isArray(v.saved)) localStorage.setItem('lf-saved-v1',JSON.stringify(v.saved.slice(0,MAX_SAVED)));
-      $s('bk-status').textContent='Backup restored. Reloading…'; setTimeout(()=>location.reload(),600);
+      let extra=''; const nl=v.nutrilens;
+      if(nl&&Array.isArray(nl.profiles)&&nl.profiles.length){ localStorage.setItem('nl_profiles',JSON.stringify(nl.profiles)); extra+=`, ${nl.profiles.length} profile${nl.profiles.length>1?'s':''}`; }
+      if(nl&&nl.ytKey){ localStorage.setItem('nl_yt_key',nl.ytKey); extra+=', YouTube key'; }
+      $s('bk-status').textContent=`Backup restored${extra}. Reloading…`; setTimeout(()=>location.reload(),600);
     }catch(err){ $s('bk-status').textContent='That file isn\'t a Meal Planner backup.'; } };
 });
 /* Inside NutriLens the menu already names the page, so the planner's own title is hidden */
@@ -898,7 +911,8 @@ function render(){
     return `<li data-c="${di}|${k}|${j}"><span class="dn">${item(d)}${ad?'<span class="added" title="Added by you">added</span>':''}</span><span class="btns"><button type="button" class="rp" data-r="${di}|${k}|${j}" aria-label="Replace ${esc(d)}, ${DAYS[di]} ${l.toLowerCase()}" title="Replace this dish">⇄</button><button type="button" class="rm" data-x="${di}|${k}|${j}" aria-label="Delete ${esc(d)} from ${DAYS[di]} ${l.toLowerCase()}" title="Delete this dish">×</button></span></li>`;};
   const PK=typeof LIB!=='undefined'?LIB.picked:null;
   const placeB=(di,k,l)=>PK?`<button type="button" class="place" data-cell="${di}|${k}" aria-label="Place ${esc(PK.items.join(' + '))} in ${DAYS[di]} ${l.toLowerCase()}">Place here</button>`:'';
-  const addB=(di,k,l)=>`<span class="cellbar"><button type="button" class="add" data-a="${di}|${k}" aria-label="Add a dish to ${DAYS[di]} ${l.toLowerCase()}: type to search" title="Type a dish name to add it">+ Add</button>${w.days[di][k].length?`<button type="button" class="mgrip" data-mg="${di}|${k}" aria-label="Whole ${DAYS[di]} ${l.toLowerCase()} meal: drag it to another day to move or copy" title="Drag the whole meal to another day">⠿</button>`:''}</span>`;
+  const addB=(di,k,l)=>{const n=w.days[di][k].length;
+    return `<span class="cellbar">${n>=MAXCELL?'':`<button type="button" class="add" data-a="${di}|${k}" aria-label="Add a dish to ${DAYS[di]} ${l.toLowerCase()}: type to search" title="Type a dish name to add it">+ Add</button>`}${n?`<button type="button" class="mgrip" data-mg="${di}|${k}" aria-label="Whole ${DAYS[di]} ${l.toLowerCase()} meal: drag it to another day to move or copy" title="Drag the whole meal to another day">⠿</button>`:''}</span>`;};
   document.getElementById('tbody').innerHTML=SLOTS.map(([k,l])=>`<tr><th scope="row">${l}</th>${w.days.map((day,di)=>`<td data-cell="${di}|${k}"${PK&&PK.slot===k?' class="tgt"':''}><ul>${day[k].map((d,j)=>li(d,di,k,l,j)).join('')}</ul>${addB(di,k,l)}${placeB(di,k,l)}</td>`).join('')}</tr>`).join('');
   if(typeof markSaved==='function') markSaved();
   if(typeof weekTabs==='function') weekTabs();
@@ -1223,7 +1237,7 @@ $('toast-undo').onclick=()=>{
   syncFixed(w,u.d,u.s); st.idx=u.w; save(); render(); flash(u.d,u.s,u.i); showToast(`Put back ${u.from}.`);
 };
 document.addEventListener('click',e=>{
-  const b=e.target.closest('.rp[data-r]'); if(b){ const [d,s,i]=b.dataset.r.split('|'); openRp(+d,s,+i,b); return; }
+  const b=e.target.closest('.rp[data-r]'); if(b){ const [d,s,i]=b.dataset.r.split('|'); openInlineReplace(+d,s,+i,b); return; }
   const a=e.target.closest('.add[data-a]'); if(a){ const [d,s]=a.dataset.a.split('|'); openInline(+d,s,a); return; }
   const r=e.target.closest('.rm[data-x]'); if(r){ const [d,s,i]=r.dataset.x.split('|'); doRemove(+d,s,+i); }
 });
@@ -1445,19 +1459,21 @@ function pick(kind,ci,j){
 /* Put dishes into a meal. A whole combination replaces the meal; single dishes are added to it. */
 function placeInto(d,s,items,whole){
   const w=st.weeks[st.idx]; const cell=w.days[d][s]; const before=JSON.stringify(w);
-  let added=[];
+  let added=[], capped=false;
+  const cap=typeof MAXCELL==='number'?MAXCELL:30;
   if(whole){
-    cell.length=0; items.forEach(n=>{ cell.push(n); added.push(n); });
+    const keep=items.slice(0,cap); capped=keep.length<items.length;
+    cell.length=0; keep.forEach(n=>{ cell.push(n); added.push(n); });
     if(!w.custom){ (w.fixed=w.fixed||{})[d+'|'+s]=cell.slice(); }
-  } else items.forEach(n=>{ if(cell.includes(n)) return; cell.push(n); added.push(n); if(!w.custom) (w.adds=w.adds||[]).push({d,s,name:n}); });
+  } else items.forEach(n=>{ if(cell.includes(n)) return; if(cell.length>=cap){ capped=true; return; } cell.push(n); added.push(n); if(!w.custom) (w.adds=w.adds||[]).push({d,s,name:n}); });
   syncFixed(w,d,s);
   const where=`${DAYS[d]} ${slotLabel(s).toLowerCase()}`;
-  if(!added.length){ showToast(`${items[0]} is already in ${where}.`); $('toast-undo').hidden=true; return; }
+  if(!added.length){ showToast(capped?`This meal already has ${cap} dishes, the most at a time.`:`${items[0]} is already in ${where}.`); $('toast-undo').hidden=true; return; }
   undo.push({t:'snap',w:st.idx,before}); save(); render(); renderLib();
   cell.forEach((n,i)=>{ if(added.includes(n)) document.querySelectorAll(`li[data-c="${d}|${s}|${i}"]`).forEach(el=>{el.classList.remove('just');void el.offsetWidth;el.classList.add('just');}); });
   const lim=cell.filter(n=>['P','R'].includes(catOf(n))).length;
   const off=items.some(n=>!isOwn(n)&&!(RX.INFO[n]&&RX.INFO[n].bits&({morningDrink:1,breakfast:2,morningSnack:4,lunchPacked:8,homeLunch:16,eveningSnack:32,dinner:64,nightDrink:128})[s])&&!(s==='nightDrink'&&RX.INFO[n]&&RX.INFO[n].cuisine==='Drink'));
-  showToast(`${whole?'Set':'Added to'} ${where}: ${added.join(' + ')}.${lim>1?` This meal now has ${lim} limited items.`:''}${off?' Some of it isn\'t usually served at this meal in your list.':''}`);
+  showToast(`${whole?'Set':'Added to'} ${where}: ${added.join(' + ')}.${lim>1?` This meal now has ${lim} limited items.`:''}${off?' Some of it isn\'t usually served at this meal in your list.':''}${capped?` Stopped at ${cap} dishes, the most at a time.`:''}`);
 }
 /* ---- pointer drag (mouse: drag right away; touch: press and hold, then drag) ---- */
 let drag=null;
@@ -1567,7 +1583,8 @@ function favListForSlot(slot){ const bit={morningDrink:1,breakfast:2,morningSnac
 function ownForSlot(slot){ return ownList().filter(n=>{ const s=st.custom[n].slots; return !s||!s.length||s.includes(slot); }).sort((a,b)=>a.localeCompare(b)); }
 
 /* ---------- Type-to-add with suggestions ---------- */
-const AC={el:null,input:null,cell:null,items:[],active:-1,btn:null};
+const MAXCELL=30; // most dishes allowed in one meal; "+ Add" hides once a meal is this full
+const AC={el:null,input:null,cell:null,items:[],active:-1,btn:null,rep:null};
 const CATTXT={L:'generally low',P:'portion-dependent',R:'recipe-dependent',V:'verify',H:'high FODMAP',U:'your dish'};
 function suggest(q,d,s){
   const w=st.weeks[st.idx]; const t=q.trim().toLowerCase().replace(/\s+/g,' '); if(!t) return [];
@@ -1598,8 +1615,22 @@ function openInline(d,s,btn){
   AC.input.addEventListener('blur',()=>setTimeout(()=>{ if(AC.input&&document.activeElement!==AC.input&&!$('nd').open) closeInline(); },150));
   AC.input.focus(); acUpdate();
 }
-function closeInline(){ if(!AC.input) return; const {d,s}=AC.cell; AC.input=null; AC.cell=null; $('aclist').hidden=true; if(AC.wrap&&AC.wrap.isConnected) render(); AC.wrap=null;
-  const b=[...document.querySelectorAll(`.add[data-a="${d}|${s}"]`)].find(b=>b.offsetParent); return b; }
+/* Replace: same type-to-search box, opened in place of one dish instead of the "+ Add" button. */
+function openInlineReplace(d,s,i,btn){
+  if(AC.input) closeInline();
+  const w=st.weeks[st.idx]; const dish=w.days[d][s][i]; if(dish==null) return;
+  const li=btn.closest('li[data-c]'); if(!li) return;
+  const wrap=document.createElement('span'); wrap.className='acwrap';
+  wrap.innerHTML=`<input class="acin" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="aclist" autocomplete="off" spellcheck="false" placeholder="Replace with…" aria-label="Replace ${esc(dish)}, ${DAYS[d]} ${slotLabel(s).toLowerCase()}">`;
+  li.innerHTML=''; li.appendChild(wrap);
+  AC.input=wrap.querySelector('input'); AC.cell={d,s}; AC.wrap=wrap; AC.items=[]; AC.active=-1; AC.rep={d,s,i,dish};
+  AC.input.addEventListener('input',acUpdate); AC.input.addEventListener('keydown',acKey);
+  AC.input.addEventListener('blur',()=>setTimeout(()=>{ if(AC.input&&document.activeElement!==AC.input&&!$('nd').open) closeInline(); },150));
+  AC.input.focus(); acUpdate();
+}
+function closeInline(){ if(!AC.input) return; const {d,s}=AC.cell; const rep=AC.rep; AC.input=null; AC.cell=null; AC.rep=null; $('aclist').hidden=true; if(AC.wrap&&AC.wrap.isConnected) render(); AC.wrap=null;
+  const sel=rep?`.rp[data-r="${rep.d}|${rep.s}|${rep.i}"]`:`.add[data-a="${d}|${s}"]`;
+  const b=[...document.querySelectorAll(sel)].find(b=>b.offsetParent); return b; }
 function acPos(){ if(!AC.input) return; const r=AC.input.getBoundingClientRect(); const L=$('aclist'); const w=Math.max(r.width,Math.min(340,window.innerWidth-24));
   L.style.width=w+'px'; L.style.left=Math.max(12,Math.min(r.left,window.innerWidth-w-12))+'px';
   const below=window.innerHeight-r.bottom; if(below<220&&r.top>below){ L.style.top=''; L.style.bottom=(window.innerHeight-r.top+4)+'px'; } else { L.style.bottom=''; L.style.top=(r.bottom+4)+'px'; } }
@@ -1611,6 +1642,10 @@ function acUpdate(){
   const rows=AC.items.map((x,i)=>`<li role="option" id="aco${i}" class="aco${x.inMeal?' dim':''}${x.fav?' fav':''}" data-i="${i}" aria-selected="false"><span>${x.fav?'<b class="star" aria-label="favourite">★</b> ':''}${esc(x.n)}</span><small class="c-${x.cat}">${x.sim?`<b class="simtag">≈ ${x.sim==='same'?'same dish?':'similar'}</b> · `:''}${x.inMeal?'already in this meal':CATTXT[x.cat]}${!x.slot&&!x.own?' · not listed for this meal':''}</small></li>`);
   const extra=[];
   if(q.trim()&&!exact) extra.push(`<li role="option" id="acnew" class="aco acnew" data-act="new" aria-selected="false"><span>+ Save “${esc(q.trim())}” as a new dish…</span></li>`);
+  if(AC.rep&&!q.trim()){ // Replace, before typing: offer the other two quick routes up front
+    extra.push(`<li role="option" id="acsuggest" class="aco acbrowse" data-act="suggest1" aria-selected="false"><span>Suggest a dish for me</span></li>`);
+    extra.push(`<li role="option" id="acclear" class="aco acbrowse" data-act="clear" aria-selected="false"><span>Clear this dish (remove it, add nothing)</span></li>`);
+  }
   extra.push(`<li role="option" id="acbrowse" class="aco acbrowse" data-act="browse" aria-selected="false"><span>Browse the full list with filters…</span></li>`);
   L.innerHTML=(q.trim()?(rows.length?'':`<li class="acnone">No dish in your list matches “${esc(q.trim())}”.</li>`)+rows.join(''):`<li class="acnone">Start typing, e.g. “le” for lemon rice, lemon chicken…</li>`)+(AC.total>40?`<li class="acnone">${AC.total-40} more — keep typing to narrow down.</li>`:'')+extra.join('');
   AC.opts=[...L.querySelectorAll('.aco')]; AC.active=AC.opts.length&&q.trim()&&rows.length?0:-1;
@@ -1627,27 +1662,57 @@ function acKey(e){
 function acEnter(){ // Enter without a highlighted suggestion
   const q=AC.input.value.trim().replace(/\s+/g,' '); if(!q) return;
   const hit=findSameName(q);
-  if(hit) acAdd(hit); else openNewDish(q);
+  if(hit) (AC.rep?acReplace:acAdd)(hit); else openNewDish(q);
 }
 function acChoose(o){
   if(o.dataset.act==='new') return openNewDish(AC.input.value.trim());
-  if(o.dataset.act==='browse'){ const {d,s}=AC.cell; closeInline(); const b=[...document.querySelectorAll(`.add[data-a="${d}|${s}"]`)].find(b=>b.offsetParent); openAdd(d,s,b); return; }
-  const x=AC.items[+o.dataset.i]; if(x) acAdd(x.n);
+  if(o.dataset.act==='clear'){ const rep=AC.rep; closeInline(); if(rep) doRemove(rep.d,rep.s,rep.i); return; }
+  if(o.dataset.act==='suggest1') return acSuggestOne();
+  if(o.dataset.act==='browse'){ const {d,s}=AC.cell; const rep=AC.rep; closeInline();
+    if(rep){ const b=[...document.querySelectorAll(`.rp[data-r="${rep.d}|${rep.s}|${rep.i}"]`)].find(b=>b.offsetParent); openRp(rep.d,rep.s,rep.i,b); }
+    else { const b=[...document.querySelectorAll(`.add[data-a="${d}|${s}"]`)].find(b=>b.offsetParent); openAdd(d,s,b); }
+    return; }
+  const x=AC.items[+o.dataset.i]; if(x) (AC.rep?acReplace:acAdd)(x.n);
+}
+/* Replace → "Suggest a dish for me": one tap, no typing — the same local ranking the old
+   Replace dialog opens with, picking its top fit (skipping the dish already there). */
+function acSuggestOne(){
+  const {d:day,s:slot,i}=AC.rep; const w=st.weeks[st.idx]; const dish=w.days[day][slot][i];
+  const r=RX.rank({week:w,day,slot,i,pref:'',query:'',have:'',text:''});
+  const pick=(r.items||[]).find(x=>x.name!==dish);
+  if(!pick){ showToast('Nothing else in your list fits this meal yet — try typing a name, or Browse the full list.'); $('toast-undo').hidden=true; return; }
+  acReplace(pick.name);
 }
 $('aclist').addEventListener('mousedown',e=>e.preventDefault());
 $('aclist').addEventListener('click',e=>{ const o=e.target.closest('.aco'); if(o&&AC.input) acChoose(o); });
 function acAdd(n){
   const {d,s}=AC.cell; const w=st.weeks[st.idx];
   if(w.days[d][s].includes(n)){ AC.input.value=''; acUpdate(); showToast(`${n} is already in this meal.`); $('toast-undo').hidden=true; return; }
+  if(w.days[d][s].length>=MAXCELL){ closeInline(); showToast(`This meal already has ${MAXCELL} dishes, the most at a time.`); $('toast-undo').hidden=true; return; }
   placeInto(d,s,[n],false); // re-renders the week; reopen the box so several dishes can be typed in a row
   const b=[...document.querySelectorAll(`.add[data-a="${d}|${s}"]`)].find(b=>b.offsetParent); AC.input=null; if(b) openInline(d,s,b);
+}
+/* swap one dish for another in place: moves the state, keeps w.swaps (so Regenerate week can re-apply it),
+   and leaves undo/syncFixed exactly as the old Replace dialog did */
+function applyReplace(day,slot,i,name){
+  const w=st.weeks[st.idx]; const meal=w.days[day][slot]; const dish=meal[i];
+  const role=RX.roleOf(w,day,slot,i); const ad=addedAt(w,day,slot,dish);
+  meal[i]=name; if(ad) ad.name=name; else (w.swaps=w.swaps||[]).push({d:day,s:slot,i,from:dish,to:name,role});
+  undo.push({t:'rep',w:st.idx,d:day,s:slot,i,from:dish,to:name,added:!!ad}); syncFixed(w,day,slot); save();
+  return dish;
+}
+function acReplace(name){
+  const {d:day,s:slot,i}=AC.rep; const dish=applyReplace(day,slot,i,name);
+  closeInline(); flash(day,slot,i);
+  const lim=st.weeks[st.idx].days[day][slot].filter(x=>['P','R'].includes(catOf(x))).length;
+  showToast(`Replaced ${dish} with ${name} (${DAYS[day]}, ${slotLabel(slot).toLowerCase()}).${lim>1?` This meal now has ${lim} limited items.`:''}`);
 }
 /* ---------- New dish confirmation ---------- */
 const nd=$('nd'); let ndCell=null;
 function openNewDish(name){
-  ndCell=AC.cell?{...AC.cell}:null; if(!ndCell) return;
+  ndCell=AC.cell?{...AC.cell,rep:AC.rep?{...AC.rep}:null}:null; if(!ndCell) return;
   $('nd-name').value=name.slice(0,80); $('nd-link').value=''; $('nd-note').value=''; $('nd-msg').textContent='';
-  $('nd-where').textContent=`It will be added to ${DAYS[ndCell.d]} ${slotLabel(ndCell.s).toLowerCase()} and kept under ${slotLabel(ndCell.s)} in the meal combinations, so you can drag it to other days.`;
+  $('nd-where').textContent=ndCell.rep?`It will replace ${ndCell.rep.dish} in ${DAYS[ndCell.d]} ${slotLabel(ndCell.s).toLowerCase()} and be kept under ${slotLabel(ndCell.s)} in the meal combinations, so you can drag it to other days.`:`It will be added to ${DAYS[ndCell.d]} ${slotLabel(ndCell.s).toLowerCase()} and kept under ${slotLabel(ndCell.s)} in the meal combinations, so you can drag it to other days.`;
   $('aclist').hidden=true; nd.showModal(); $('nd-link').focus(); ndForce=''; ndCheck(name.slice(0,80));
 }
 /* warn when the new name looks like a dish that already exists; a second Save keeps it as a separate dish */
@@ -1655,7 +1720,10 @@ let ndForce='';
 function ndCheck(name){ const sim=SIM.find(name,allDishNames(),3).filter(h=>!SIM.same(h.n,name)); const top=sim.find(h=>h.kind==='same')||(sim[0]&&sim[0].score>=0.67?sim[0]:null);
   if(!top) return false; ndForce=name;
   $('nd-msg').innerHTML=`Looks like <b>${esc(top.n)}</b>, already in your ${RX.INFO[top.n]?'meal list':'dishes'}. <button type="button" class="btn sm" id="nd-use">Use ${esc(top.n)}</button> Or press Save to keep “${esc(name)}” as a separate dish.`;
-  $('nd-use').onclick=()=>{ const {d,s}=ndCell; AC.input=null; nd.close(); placeInto(d,s,[top.n],false); }; return true; }
+  $('nd-use').onclick=()=>{ AC.input=null; nd.close();
+    if(ndCell.rep){ const {d:day,s:slot,i}=ndCell.rep; const dish=applyReplace(day,slot,i,top.n); render(); flash(day,slot,i);
+      showToast(`Replaced ${dish} with ${top.n} (${DAYS[day]}, ${slotLabel(slot).toLowerCase()}).`); return; }
+    const {d,s}=ndCell; placeInto(d,s,[top.n],false); }; return true; }
 $('nd-cancel').onclick=()=>nd.close();
 nd.addEventListener('close',()=>{ if(AC.input){ AC.input.focus(); acUpdate(); } });
 $('nd-form').addEventListener('submit',e=>{
@@ -1671,6 +1739,10 @@ $('nd-form').addEventListener('submit',e=>{
   st.custom[key]={link:link||(ex?st.custom[ex].link:''),note:note||(ex?st.custom[ex].note:''),slots:[...new Set([...((ex&&st.custom[ex].slots)||[]),s])]};
   Store.putDish(key,st.custom[key]).catch(()=>{});
   AC.input=null; nd.close(); LIB.slot=s; LIB.q=''; $('lib-q').value=''; saveLib();
+  if(ndCell.rep){ const {d:day,s:slot,i}=ndCell.rep; const dish=applyReplace(day,slot,i,key); render(); renderLib(); flash(day,slot,i);
+    showToast(`Saved “${key}” as your dish and replaced ${dish} with it in ${DAYS[day]} ${slotLabel(slot).toLowerCase()}. It's also in Meal combinations → ${slotLabel(slot)}.`);
+    return;
+  }
   placeInto(d,s,[key],false); renderLib();
   showToast(`Saved “${key}” as your dish and added it to ${DAYS[d]} ${slotLabel(s).toLowerCase()}. It's also in Meal combinations → ${slotLabel(s)}.`);
 });
@@ -1799,12 +1871,13 @@ function meta(w){ w=w||st.weeks[st.idx]; if(!w.meta) w.meta={}; const m=w.meta;
   m.meals=m.meals||{}; m.rows=m.rows||{}; m.week=m.week||{suggest:'',novelty:'mix',time:'',diet:'any'}; return m; }
 NL.meta=meta;
 const mk=(d,s)=>d+'|'+s;
-function peopleFor(w,d,s){ const m=meta(w); const a=(m.meals[mk(d,s)]||{}).people, b=m.days[d].people; return +(a||b||st.family.size||3); }
+function peopleFor(w,d,s){ const m=meta(w); const a=(m.meals[mk(d,s)]||{}).people, b=m.days[d].people; return +(a||b||st.family.size||3); } // meal > day > family (no row/week override — headcount is a per-meal/per-day fact, not a weekly pattern)
 function guestFor(w,d,s){ const m=meta(w); const a=(m.meals[mk(d,s)]||{}).guest; return a!=null?!!a:!!m.days[d].guest; }
 function guestNoteFor(w,d,s){ const m=meta(w); return ((m.meals[mk(d,s)]||{}).guestNote||m.days[d].guestNote||'').trim(); }
-function dietFor(w,d){ const m=meta(w); return m.days[d].diet||m.week.diet||'any'; }
-function timeFor(w,d,s){ const m=meta(w); return (m.meals[mk(d,s)]||{}).time||(m.rows[s]||{}).time||m.week.time||''; }
-Object.assign(NL,{peopleFor,guestFor,guestNoteFor,dietFor,timeFor,mk});
+function dietFor(w,d,s){ const m=meta(w); return (s&&(m.meals[mk(d,s)]||{}).diet)||m.days[d].diet||(s&&(m.rows[s]||{}).diet)||m.week.diet||'any'; } // meal > day > row > week
+function timeFor(w,d,s){ const m=meta(w); return (m.meals[mk(d,s)]||{}).time||m.days[d].time||(m.rows[s]||{}).time||m.week.time||''; } // meal > day > row > week
+function noveltyFor(w,d,s){ const m=meta(w); return (s&&(m.meals[mk(d,s)]||{}).novelty)||m.days[d].novelty||(s&&(m.rows[s]||{}).novelty)||m.week.novelty||'mix'; } // meal > day > row > week
+Object.assign(NL,{peopleFor,guestFor,guestNoteFor,dietFor,timeFor,noveltyFor,mk});
 // keep settings when a generated week is regenerated, and include them in saved plans
 { const _snap=snapshot; snapshot=function(w){ const o=_snap(w); if(w.meta) o.meta=JSON.parse(JSON.stringify(w.meta)); return o; }; }
 { const b=$('regen'); const old=b.onclick; b.onclick=function(){ const m=st.weeks[st.idx].meta; old.call(this); if(m) st.weeks[st.idx].meta=m; save(); render(); }; }
@@ -1852,6 +1925,35 @@ const TIMES=[['','Any time'],['15','Quick (15 min)'],['30','20–30 min'],['60',
 const NOVELTY=[['fav','Favourites & familiar'],['mix','Mix (about one new dish a day)'],['new','Try new dishes']];
 const opt=(list,v)=>list.map(([k,l])=>`<option value="${k}"${String(v)===k?' selected':''}>${l}</option>`).join('');
 const chipsHtml=a=>(a&&a.length)?`<div class="und"><span class="und-l">Understood:</span>${a.map(x=>`<span class="uchip">${esc(x)}</span>`).join('')}</div>`:'';
+/* Local, instant "Looks like:" preview — no AI call, updates as you type. Same component for all four
+   suggest boxes (Week/Row/Day/Meal); bit!=null (Meal/Row, a single known slot) also resolves "want"
+   phrases against real dish names so a mismatch (e.g. "peanut" → only the breakfast-eligible dish
+   shows, not the snack-only one) is visible before Suggest is even clicked. */
+function previewHtml(text,bit){
+  if(!text||!text.trim()) return '';
+  const r=NL.parseWishText(text); const chips=[];
+  if(r.diet) chips.push(`<span class="uchip">${({veg:'vegetarian',egg:'veg + egg',vegan:'vegan'})[r.diet]}</span>`);
+  for(const l of r.limits) chips.push(`<span class="uchip">${esc(l.label)} ≤ ${l.k}×</span>`);
+  // a plain-text clause that's already shown as the diet chip or a repeat-limit chip above shouldn't
+  // also show up as a raw, uncleaned "want" phrase — same underlying match, just noisy to show twice
+  const DIETWORDS=/^(vegetarian|vegan|veg|eggetarian|veg ?\+? ?egg)$/;
+  const want=r.want.filter(w=>!(r.diet&&DIETWORDS.test(w.label))&&!r.limits.some(l=>w.label.includes(l.label)));
+  const matches=bit!=null?NL.wishMatches(want,bit):null;
+  want.forEach((w,i)=>{
+    if(!matches){ chips.push(`<span class="uchip">${esc(w.label)}</span>`); return; }
+    const m=matches[i];
+    if(m.here.length) chips.push(`<span class="uchip">${esc(w.label)} → ${esc(m.here[0])}</span>`);
+    else if(m.elsewhere.length) chips.push(`<span class="uchip warn">${esc(w.label)} → no match here; found “${esc(m.elsewhere[0])}” (for a different meal) <button type="button" class="linkbtn" data-usewant="${esc(m.elsewhere[0])}">use it anyway</button></span>`);
+    else chips.push(`<span class="uchip warn">${esc(w.label)} → no dish matches this</span>`); });
+  for(const n of r.no) chips.push(`<span class="uchip">no ${esc(n.label)}</span>`);
+  if(!chips.length) return '';
+  return `<div class="und-pre"><span class="und-l">Looks like:</span>${chips.join('')}</div>`; }
+function wireLivePreview(taId,preId,bit){
+  const ta=$(taId), pre=$(preId); if(!ta||!pre) return;
+  const run=()=>{ pre.innerHTML=previewHtml(ta.value,bit);
+    pre.querySelectorAll('[data-usewant]').forEach(b=>b.onclick=()=>{ const n=b.dataset.usewant;
+      ta.value=(ta.value.trim()?ta.value.trim().replace(/\.?$/,'. '):'')+`also have ${n}`; run(); ta.focus(); }); };
+  let tmr=null; ta.oninput=()=>{ clearTimeout(tmr); tmr=setTimeout(run,250); }; run(); }
 
 /* Clearing: one meal, a day, one meal slot across the week, or the whole week (dishes only; settings stay). Undo works. */
 function clearCells(cells,label){
@@ -1894,42 +1996,57 @@ const guestFields=(pre,on,note)=>`<label class="gsw"><input type="checkbox" id="
 
 /* Day dialog */
 function openDay(d){
-  const w=st.weeks[st.idx], m=meta(w), dm=m.days[d];
+  const w=st.weeks[st.idx], m=meta(w), dm=m.days[d]; const filled=Object.values(w.days[d]).some(x=>x.length);
   const body=NL.dlg(`${DAYS[d]}`,'Settings and suggestions for this day',`
    <div class="frow">${peopleField('dy-people',dm.people,st.family.size||3)}
-   <div class="fld" style="max-width:200px"><label class="lbl" for="dy-diet">Food that day</label><select id="dy-diet">${opt([['','Week default ('+((DIETS.find(x=>x[0]===(m.week.diet||'any'))||DIETS[0])[1])+')'],...DIETS],dm.diet||'')}</select></div></div>
+   <div class="fld" style="max-width:200px"><label class="lbl" for="dy-diet">Food that day</label><select id="dy-diet">${opt([['','Week default ('+((DIETS.find(x=>x[0]===(m.week.diet||'any'))||DIETS[0])[1])+')'],...DIETS],dm.diet||'')}</select></div>
+   <div class="fld" style="max-width:230px"><label class="lbl" for="dy-time">Time to cook</label><select id="dy-time">${opt([['',`Week default (${timeLbl(m.week.time)})`],...TIMES.slice(1)],dm.time||'')}</select></div>
+   ${noveltyField('dy-nov','Dishes',dm.novelty,`Week default (${noveltyLbl(m.week.novelty)})`)}</div>
    ${guestFields('dy',dm.guest,dm.guestNote)}
    <div class="fld"><label class="lbl" for="dy-sug">Suggest for ${DAYS[d]}</label><textarea id="dy-sug" rows="2" placeholder="e.g. light dinner, high protein lunch, I'll cook only breakfast today">${esc(dm.suggest||'')}</textarea></div>
+   <div id="dy-pre"></div>
    ${chipsHtml(dm.understood)}
-   <div class="rp-row"><button type="button" class="btn" id="dy-fill">Suggest for ${DAYS[d]}</button><button type="button" class="btn sec" id="dy-save">Save</button><button type="button" class="btn sec danger-t" id="dy-clear">Clear ${DAYS[d]}</button></div>
+   <div class="rp-row"><button type="button" class="btn" id="dy-fill">Suggest for ${DAYS[d]}</button>${filled?'<button type="button" class="btn sec" id="dy-add">Add to this day</button>':''}<button type="button" class="btn sec" id="dy-save">Save</button></div>
    <p class="rp-status" id="dy-status" role="status" aria-live="polite"></p>`);
   const getP=()=>parseInt($('dy-people').value)||0, gs=$('dy-guest');
   const upd=guestPrompt(body,()=>getP()||+st.family.size,()=>gs.checked,v=>{ gs.checked=v; $('dy-gnwrap').hidden=!v; });
   $('dy-people').oninput=upd; gs.onchange=()=>{ $('dy-gnwrap').hidden=!gs.checked; upd(); }; upd();
-  const store=()=>{ dm.people=getP()||null; dm.guest=gs.checked; dm.guestNote=$('dy-gnote').value.trim(); dm.diet=$('dy-diet').value||''; dm.suggest=$('dy-sug').value.trim(); save(); };
+  wireLivePreview('dy-sug','dy-pre',null);
+  const store=()=>{ dm.people=getP()||null; dm.guest=gs.checked; dm.guestNote=$('dy-gnote').value.trim(); dm.diet=$('dy-diet').value||''; dm.time=$('dy-time').value||''; dm.novelty=$('dy-nov').value||''; dm.suggest=$('dy-sug').value.trim(); save(); };
   $('dy-save').onclick=()=>{ store(); NL.closeDlg(); render(); };
-  $('dy-clear').onclick=()=>{ store(); NL.clearDay(d); };
   $('dy-fill').onclick=async()=>{ store(); await NL.fill({days:[d]},$('dy-status')); };
+  if($('dy-add')) $('dy-add').onclick=async()=>{ store(); const ww=st.weeks[st.idx]; const meals=SLOTS.map(([s])=>[d,s]);
+    await NL.fill({meals,addTo:meals.filter(([,s])=>ww.days[d][s].length).map(([,s])=>mk(d,s))},$('dy-status')); };
 }
+const dietLbl=v=>(DIETS.find(x=>x[0]===(v||'any'))||DIETS[0])[1]; const timeLbl=v=>(TIMES.find(x=>x[0]===(v||''))||TIMES[0])[1];
+const noveltyLbl=v=>(NOVELTY.find(x=>x[0]===(v||'mix'))||NOVELTY[1])[1];
+const noveltyField=(id,label,val,fallbackLbl)=>`<div class="fld"><label class="lbl" for="${id}">${label}</label><select id="${id}">${opt([['',fallbackLbl],...NOVELTY],val||'')}</select></div>`;
 /* Meal dialog */
 function openMeal(d,s){
   const w=st.weeks[st.idx], m=meta(w), k=mk(d,s), mm=m.meals[k]||(m.meals[k]={});
   const dayP=m.days[d].people||st.family.size||3; const filled=w.days[d][s].length>0;
   const body=NL.dlg(`${DAYS[d]} · ${slotLabel(s)}`,'Settings and suggestions for this meal',`
    <div class="frow">${peopleField('ml-people',mm.people,dayP)}
-   <div class="fld" style="max-width:230px"><label class="lbl" for="ml-time">Time to cook</label><select id="ml-time">${opt([['','Week default'],...TIMES.slice(1)],mm.time||'')}</select></div></div>
+   <div class="fld" style="max-width:230px"><label class="lbl" for="ml-time">Time to cook</label><select id="ml-time">${opt([['',`Default (${timeLbl(m.days[d].time||(m.rows[s]||{}).time||m.week.time)})`],...TIMES.slice(1)],mm.time||'')}</select></div>
+   <div class="fld" style="max-width:200px"><label class="lbl" for="ml-diet">Food</label><select id="ml-diet">${opt([['',`Default (${dietLbl(m.days[d].diet||(m.rows[s]||{}).diet||m.week.diet)})`],...DIETS],mm.diet||'')}</select></div>
+   ${noveltyField('ml-nov','Dishes',mm.novelty,`Default (${noveltyLbl(m.days[d].novelty||(m.rows[s]||{}).novelty||m.week.novelty)})`)}</div>
    ${guestFields('ml',mm.guest!=null?mm.guest:m.days[d].guest,mm.guestNote)}
    <div class="fld"><label class="lbl" for="ml-sug">Suggest for this meal</label><textarea id="ml-sug" rows="2" placeholder="e.g. something with paneer, 15 minutes, use leftover rice">${esc(mm.suggest||'')}</textarea></div>
+   <div id="ml-pre"></div>
    ${chipsHtml(mm.understood)}
-   <div class="rp-row"><button type="button" class="btn" id="ml-fill">${filled?'Suggest again (replaces this meal)':'Suggest this meal'}</button><button type="button" class="btn sec" id="ml-save">Save</button>${filled?'<button type="button" class="btn sec danger-t" id="ml-clear">Clear this meal</button>':''}</div>
+   <div class="rp-row"><button type="button" class="btn" id="ml-fill">${filled?'Suggest again (replaces this meal)':'Suggest this meal'}</button>${filled?'<button type="button" class="btn sec" id="ml-add">Add to this meal</button>':''}<button type="button" class="btn sec" id="ml-save">Save</button></div>
+   <p class="fod" style="font-size:12.5px;margin:0"><button type="button" class="linkbtn" id="ml-row">Plan every ${slotLabel(s).toLowerCase()} this week at once…</button></p>
    <p class="rp-status" id="ml-status" role="status" aria-live="polite"></p>`);
   const getP=()=>parseInt($('ml-people').value)||0, gs=$('ml-guest');
   const upd=guestPrompt(body,()=>getP()||dayP,()=>gs.checked,v=>{ gs.checked=v; $('ml-gnwrap').hidden=!v; });
   $('ml-people').oninput=upd; gs.onchange=()=>{ $('ml-gnwrap').hidden=!gs.checked; upd(); }; upd();
-  const store=()=>{ mm.people=getP()||null; const g=gs.checked; mm.guest=(g===!!m.days[d].guest&&mm.guest==null)?null:g; mm.guestNote=$('ml-gnote').value.trim(); mm.time=$('ml-time').value||''; mm.suggest=$('ml-sug').value.trim(); save(); };
+  wireLivePreview('ml-sug','ml-pre',NL.SLOTBIT[s]);
+  const store=()=>{ mm.people=getP()||null; const g=gs.checked; mm.guest=(g===!!m.days[d].guest&&mm.guest==null)?null:g; mm.guestNote=$('ml-gnote').value.trim(); mm.time=$('ml-time').value||''; mm.diet=$('ml-diet').value||''; mm.novelty=$('ml-nov').value||''; mm.suggest=$('ml-sug').value.trim(); save(); };
   $('ml-save').onclick=()=>{ store(); NL.closeDlg(); render(); };
-  if($('ml-clear')) $('ml-clear').onclick=()=>{ store(); NL.clearMeal(d,s); };
-  $('ml-fill').onclick=async()=>{ store(); await NL.fill({meals:[[d,s]],replace:filled},$('ml-status')); };
+  $('ml-row').onclick=()=>{ store(); openRow(s); };
+  $('ml-fill').onclick=async()=>{ store(); const add=filled&&NL.ADD_RX.test(mm.suggest||''); const w=st.weeks[st.idx];
+    await NL.fill(add?(NL.addsAreSpecific(w,d,s)?{meals:[[d,s]]}:{meals:[[d,s]],addTo:[mk(d,s)]}):{meals:[[d,s]],replace:filled},$('ml-status')); }; // “add a sweet” keeps what's there
+  if($('ml-add')) $('ml-add').onclick=async()=>{ store(); await NL.fill({meals:[[d,s]],addTo:[mk(d,s)]},$('ml-status')); };
 }
 /* Row dialog: one meal on every day ("every breakfast") */
 function openRow(s){
@@ -1937,40 +2054,44 @@ function openRow(s){
   const nFilled=w.days.filter(dd=>dd[s].length).length;
   NL.dlg(`Every ${l}`,`Plan ${l} for all 7 days at once`,`
    <div class="fld"><label class="lbl" for="rw-sug">Suggest for every ${l}</label><textarea id="rw-sug" rows="3" placeholder="e.g. a different tiffin each day, no upma, millets twice, ready in 20 minutes">${esc(r.suggest||'')}</textarea></div>
+   <div id="rw-pre"></div>
    ${chipsHtml(r.understood)}
-   <div class="frow"><div class="fld" style="max-width:230px"><label class="lbl" for="rw-time">Time to cook</label><select id="rw-time">${opt([['','Week default'],...TIMES.slice(1)],r.time||'')}</select></div></div>
-   <label class="chk"><input type="checkbox" id="rw-replace"${nFilled===7?' checked':''}> Replace the ${l}s already planned (${nFilled} of 7)</label>
+   <div class="frow"><div class="fld" style="max-width:230px"><label class="lbl" for="rw-time">Time to cook</label><select id="rw-time">${opt([['',`Week default (${timeLbl(m.week.time)})`],...TIMES.slice(1)],r.time||'')}</select></div>
+   <div class="fld" style="max-width:200px"><label class="lbl" for="rw-diet">Food</label><select id="rw-diet">${opt([['',`Week default (${dietLbl(m.week.diet)})`],...DIETS],r.diet||'')}</select></div>
+   ${noveltyField('rw-nov','Dishes',r.novelty,`Week default (${noveltyLbl(m.week.novelty)})`)}</div>
+   <label class="chk"><input type="checkbox" id="rw-replace"> Replace the ${l}s already planned (${nFilled} of 7). Unticked: empty days are filled, and anything you ask to “add” goes next to what's there.</label>
    <p class="fod" style="font-size:12.5px;margin:0">A day's own box (👥) or a meal's box (⚙) wins over this one where they disagree; this one wins over the week's.</p>
-   <div class="rp-row"><button type="button" class="btn" id="rw-fill">Suggest every ${l}</button><button type="button" class="btn sec" id="rw-save">Save</button>${nFilled?`<button type="button" class="btn sec danger-t" id="rw-clear">Clear every ${l}</button>`:''}</div>
+   <div class="rp-row"><button type="button" class="btn" id="rw-fill">Suggest every ${l}</button>${nFilled?`<button type="button" class="btn sec" id="rw-add">Add to every ${l}</button>`:''}<button type="button" class="btn sec" id="rw-save">Save</button></div>
    <p class="rp-status" id="rw-status" role="status" aria-live="polite"></p>`);
-  const store=()=>{ r.suggest=$('rw-sug').value.trim(); r.time=$('rw-time').value||''; save(); };
+  const store=()=>{ r.suggest=$('rw-sug').value.trim(); r.time=$('rw-time').value||''; r.diet=$('rw-diet').value||''; r.novelty=$('rw-nov').value||''; save(); };
   $('rw-save').onclick=()=>{ store(); NL.closeDlg(); render(); };
-  if($('rw-clear')) $('rw-clear').onclick=()=>{ store(); NL.clearSlot(s); };
-  $('rw-fill').onclick=async()=>{ store(); await NL.fill({meals:DAYS.map((_,d)=>[d,s]),replace:$('rw-replace').checked},$('rw-status')); };
+  $('rw-fill').onclick=async()=>{ store(); const rep=$('rw-replace').checked; const add=!rep&&NL.ADD_RX.test(r.suggest||'')&&!NL.addsAreSpecific(w,0,s); await NL.fill({meals:DAYS.map((_,d)=>[d,s]),replace:rep,addTo:add?DAYS.map((_,d)=>d).filter(d=>w.days[d][s].length).map(d=>mk(d,s)):[]},$('rw-status')); };
+  if($('rw-add')) $('rw-add').onclick=async()=>{ store(); const ww=st.weeks[st.idx];
+    await NL.fill({meals:DAYS.map((_,d)=>[d,s]),addTo:DAYS.map((_,d)=>d).filter(d=>ww.days[d][s].length).map(d=>mk(d,s))},$('rw-status')); };
+  wireLivePreview('rw-sug','rw-pre',NL.SLOTBIT[s]);
   setTimeout(()=>$('rw-sug').focus(),30);
 }
 NL.openRow=openRow;
 /* Week dialog: Regenerate week asks what you want first */
 function openWeek(){
-  const m=meta(); const wk=m.week;
+  const w=st.weeks[st.idx]; const m=meta(w); const wk=m.week; const anyFilled=w.days.some(dd=>Object.values(dd).some(x=>x.length));
   NL.dlg('Regenerate week','Tell it what you want. Every meal is planned again.',`
    <div class="fld"><label class="lbl" for="wk-sug">What do you want this week?</label><textarea id="wk-sug" rows="4" placeholder="e.g. Breakfast: no upma or pongal. Lunch: more greens and dal. Evening snack within 15 minutes. I have idli batter I can use 5–6 times.">${esc(wk.suggest||'')}</textarea></div>
+   <div id="wk-pre"></div>
    ${chipsHtml(wk.understood)}
    <div class="frow"><div class="fld"><label class="lbl" for="wk-nov">Dishes</label><select id="wk-nov">${opt(NOVELTY,wk.novelty||'mix')}</select></div>
    <div class="fld"><label class="lbl" for="wk-time">Time to cook (default)</label><select id="wk-time">${opt(TIMES,wk.time||'')}</select></div>
    <div class="fld"><label class="lbl" for="wk-diet">Food (default)</label><select id="wk-diet">${opt(DIETS,wk.diet||'any')}</select></div></div>
    <label class="chk"><input type="checkbox" id="wk-keep"> Keep the dishes already in the week (fill only the empty meals)</label>
    <p class="fod" style="font-size:12.5px;margin:0">Your requirements here, on each day (👥) and on each meal (⚙) are all followed. If they disagree, a meal's box wins over its day's, and a day's over this one. Undo brings the previous week back.</p>
-   <div class="rp-row"><button type="button" class="btn" id="wk-fill">Regenerate week</button><button type="button" class="btn sec" id="wk-save">Save without regenerating</button></div>
-   <div class="clearbox"><span class="lbl">One meal for every day</span><div class="rp-row"><select id="wk-rslot" aria-label="Meal to plan for every day">${SLOTS.map(([k,l])=>`<option value="${k}">Every ${l.toLowerCase()}</option>`).join('')}</select><button type="button" class="btn sec" id="wk-row">Plan this meal…</button></div></div>
-   <div class="clearbox"><span class="lbl">Clear dishes</span><div class="rp-row"><select id="wk-cslot" aria-label="Meal slot to clear">${SLOTS.map(([k,l])=>`<option value="${k}">Every ${l.toLowerCase()}</option>`).join('')}</select><button type="button" class="btn sec danger-t" id="wk-cslot-go">Clear this slot</button><button type="button" class="btn sec danger-t" id="wk-clear">Clear whole week</button></div></div>
+   <div class="rp-row"><button type="button" class="btn" id="wk-fill">Regenerate week</button>${anyFilled?'<button type="button" class="btn sec" id="wk-add">Add to this week</button>':''}<button type="button" class="btn sec" id="wk-save">Save without regenerating</button></div>
    <p class="rp-status" id="wk-status" role="status" aria-live="polite"></p>`);
   const store=()=>{ wk.suggest=$('wk-sug').value.trim(); wk.novelty=$('wk-nov').value; wk.time=$('wk-time').value; wk.diet=$('wk-diet').value; save(); };
   $('wk-save').onclick=()=>{ store(); NL.closeDlg(); render(); };
-  $('wk-clear').onclick=()=>{ store(); NL.clearWeek(); };
-  $('wk-cslot-go').onclick=()=>{ store(); NL.clearSlot($('wk-cslot').value); };
-  $('wk-row').onclick=()=>{ store(); openRow($('wk-rslot').value); };
   $('wk-fill').onclick=async()=>{ store(); await regenerate($('wk-keep').checked,$('wk-status')); };
+  if($('wk-add')) $('wk-add').onclick=async()=>{ store(); const ww=st.weeks[st.idx]; const meals=DAYS.flatMap((_,d)=>SLOTS.map(([s])=>[d,s]));
+    await NL.fill({meals,addTo:meals.filter(([d,s])=>ww.days[d][s].length).map(([d,s])=>mk(d,s))},$('wk-status')); };
+  wireLivePreview('wk-sug','wk-pre',null);
   setTimeout(()=>$('wk-sug').focus(),30);
 }
 async function regenerate(keep,statusEl){
@@ -1989,7 +2110,8 @@ $('regen').onclick=openWeek;
 
 /* Render decorations: day headers and meal ⚙ */
 function dayChips(d){ const w=st.weeks[st.idx], m=meta(w), dm=m.days[d]; const n=dm.people||st.family.size||3; const diet=dm.diet||'';
-  return `<div class="dhc"><button type="button" class="dpeople" data-day="${d}" aria-label="${DAYS[d]}: ${n} people${dm.guest?', guest day':''}. Day settings and suggestions" title="Day settings and suggestions">👥 ${n}${dm.guest?' 🎉':''}${diet&&diet!=='any'?` · ${({veg:'veg',egg:'veg+egg',nonveg:'non-veg'})[diet]}`:''}${dm.suggest?' ✨':''}</button></div>`; }
+  const any=Object.values(w.days[d]).some(x=>x.length);
+  return `<div class="dhc">${any?`<button type="button" class="dclear" data-dc="${d}" title="Clear ${DAYS[d]}" aria-label="Clear every meal on ${DAYS[d]}">Clear day</button>`:''}<button type="button" class="dpeople" data-day="${d}" aria-label="${DAYS[d]}: ${n} people${dm.guest?', guest day':''}. Day settings and suggestions" title="Day settings and suggestions">👥 ${n}${dm.guest?' 🎉':''}${diet&&diet!=='any'?` · ${({veg:'veg',egg:'veg+egg',nonveg:'non-veg'})[diet]}`:''}${dm.suggest?' ✨':''}</button></div>`; }
 NL.after(()=>{
   const w=st.weeks[st.idx]; if(!w) return; const m=meta(w);
   document.querySelectorAll('#thead th[scope="col"]').forEach((th,i)=>{ if(i===0) return; th.insertAdjacentHTML('beforeend',dayChips(i-1)); });
@@ -1998,16 +2120,40 @@ NL.after(()=>{
   document.querySelectorAll('[data-cell]').forEach(cell=>{ if(!cell.matches('td,dd')) return; const [d,s]=cell.dataset.cell.split('|');
     const k=mk(d,s), mm=m.meals[k]||{}; const bar=cell.querySelector('.cellbar'); if(!bar) return;
     const g=guestFor(w,+d,s); const n=peopleFor(w,+d,s);
-    bar.insertAdjacentHTML('beforeend',`<button type="button" class="mopt${mm.suggest||mm.time||mm.people||mm.guest!=null?' set':''}" data-mo="${d}|${s}" aria-label="${DAYS[d]} ${slotLabel(s).toLowerCase()}: meal settings and suggestions" title="Meal settings and suggestions">⚙</button>`);
-    if(g||mm.people){ const fam=+st.family.size||3; cell.insertAdjacentHTML('afterbegin',`<div class="mtag">${g?'🎉 Guest meal · ':''}👥 ${g&&n>fam?`${fam} family + ${n-fam} guests`:n}</div>`); }
+    if(w.days[+d][s].length) bar.insertAdjacentHTML('beforeend',`<button type="button" class="mclear" data-mc="${d}|${s}" title="Clear this meal" aria-label="Clear ${DAYS[d]} ${slotLabel(s).toLowerCase()}">Clear</button>`);
+    bar.insertAdjacentHTML('beforeend',`<button type="button" class="mopt${mm.suggest||mm.time||mm.people||mm.novelty||mm.guest!=null?' set':''}" data-mo="${d}|${s}" aria-label="${DAYS[d]} ${slotLabel(s).toLowerCase()}: meal settings and suggestions" title="Meal settings and suggestions">⚙</button>`);
+    if(g||mm.people){ const fam=+st.family.size||3; const label=g&&n>fam?`${fam} family + ${n-fam} guests`:String(n);
+      cell.insertAdjacentHTML('afterbegin',`<div class="mtag">${g?'🎉 Guest meal · 👥 '+label:`<button type="button" class="mtag-n" data-mtn="${d}|${s}" aria-label="People for ${DAYS[+d]} ${slotLabel(s).toLowerCase()}: ${label}. Edit">👥 ${label}</button>`}</div>`); }
   });
 });
+/* Click the 👥 count right on a meal cell to change it in place, without opening the ⚙ dialog.
+   Only the plain-override case (no guest math to disentangle) is inline-editable; a guest meal's
+   combined "family + guests" tag still opens the full dialog, same as before. */
+function editPeopleInline(btn){
+  const [d,s]=btn.dataset.mtn.split('|'); const w=st.weeks[st.idx], m=meta(w), k=mk(+d,s), mm=m.meals[k]||(m.meals[k]={});
+  const inp=document.createElement('input'); inp.type='number'; inp.min='1'; inp.max='200'; inp.className='mtag-in';
+  inp.value=mm.people||''; inp.setAttribute('aria-label',`People for ${DAYS[+d]} ${slotLabel(s).toLowerCase()}`);
+  btn.replaceWith(inp); inp.focus(); inp.select();
+  let done=false;
+  const commit=()=>{ if(done) return; done=true; mm.people=parseInt(inp.value)||null; save(); render(); };
+  const cancel=()=>{ if(done) return; done=true; render(); };
+  inp.onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); commit(); } else if(ev.key==='Escape'){ cancel(); } };
+  inp.onblur=commit;
+}
 document.addEventListener('click',e=>{
+  const mtn=e.target.closest('.mtag-n'); if(mtn){ editPeopleInline(mtn); return; }
   const dp=e.target.closest('.dpeople'); if(dp){ openDay(+dp.dataset.day); return; }
   const mo=e.target.closest('.mopt'); if(mo){ const [d,s]=mo.dataset.mo.split('|'); openMeal(+d,s); return; }
   const rc=e.target.closest('.rowclear'); if(rc) NL.clearSlot(rc.dataset.cs);
+  const mc=e.target.closest('.mclear'); if(mc){ const [d,s]=mc.dataset.mc.split('|'); NL.clearMeal(+d,s); }
+  const dc=e.target.closest('.dclear'); if(dc) NL.clearDay(+dc.dataset.dc);
+  if(e.target.closest('#clrweek')) NL.clearWeek();
   const rs=e.target.closest('.rowsug'); if(rs) openRow(rs.dataset.rs);
 });
+
+/* Clear week: toolbar button, shown when the week has dishes */
+{ const b2=$('bar2'); if(b2&&!$('clrweek')){ const b=document.createElement('button'); b.type='button'; b.className='bbtn'; b.id='clrweek'; b.textContent='Clear week'; b.title='Remove every dish from this week (Undo brings them back)'; const st2=$('b2status'); b2.insertBefore(b,st2); } }
+NL.after(()=>{ const b=$('clrweek'); const w=st.weeks[st.idx]; if(b) b.hidden=!(w&&w.days.some(dd=>Object.values(dd).some(x=>x.length))); });
 
 /* ---------- Step 2: favourites from YouTube playlists ----------
    Uses the YouTube API key saved in NutriLens Settings (nl_yt_key). Playlists must be public or unlisted. */
@@ -2414,22 +2560,11 @@ function verdict(m,d){ // combine everything known for member m and dish d
   parts.sort((x,y)=>RANK[y.s]-RANK[x.s]); const top=parts[0];
   const lim=parts.filter(x=>x.s==='limit'&&x.p); return {s:top.s,w:parts.filter(x=>x.s===top.s).map(x=>x.w).filter(Boolean).join('; ')||'',p:(top.s==='limit'&&lim.length)?lim.map(x=>x.p).join(' · '):''}; }
 function planDishes(w){ const set=new Set(); w.days.forEach(dd=>Object.values(dd).forEach(m=>m.forEach(n=>set.add(n)))); return [...set]; }
-let checkCtl=null;
-async function checkFamily(){
-  const w=st.weeks[st.idx]; const ms=NL.members(); const dishes=planDishes(w);
-  if(!dishes.length){ NL.status('Add some dishes first, then check.'); return; }
-  if(!ms.length){ NL.status('No NutriLens profiles found. Add family members as NutriLens profiles.',true); return; }
-  w.checked=true; save(); render();
-  const todo=[]; // [dish, member] pairs that need Gemini
-  for(const d of dishes) for(const m of ms){ if(!(needsAI(m)||(m.goals.fodmap&&!RX.INFO[d]))) continue; if(!st.suit[d+'|'+memberSig(m)]) todo.push([d,m]); }
-  const guestJobs=[]; w.days.forEach((dd,di)=>Object.entries(dd).forEach(([s,list])=>{ if(!NL.guestFor(w,di,s)) return; const note=NL.guestNoteFor(w,di,s); if(!note) return;
-    list.forEach(n=>{ const k=n+'|'+NL.hash(note); if(!st.gsuit[k]) guestJobs.push([n,note,k]); }); }));
-  if((todo.length||guestJobs.length)&&!NL.aiOn()){ NL.status('Gemini isn\'t set up, so only the meal list\'s FODMAP ratings and profile allergies are shown.',true); return; }
-  const btn=$('checkbtn'); checkCtl=new AbortController(); const sig=checkCtl.signal; btn.classList.add('running'); setBtnLabel(btn,'Stop checking');
-  try{
+/* Gemini judges each (dish, member) pair not judged before; results are kept in st.suit */
+async function checkPairs(todo,sig,say){
     const byDish={}; todo.forEach(([d,m])=>{ (byDish[d]=byDish[d]||[]).push(m); });
     const ds=Object.keys(byDish);
-    for(let i=0;i<ds.length;i+=15){ const chunk=ds.slice(i,i+15); NL.status(`Checking dishes for the family… ${Math.min(i+15,ds.length)} of ${ds.length}`);
+    for(let i=0;i<ds.length;i+=15){ const chunk=ds.slice(i,i+15); (say||NL.status)(`Checking dishes for the family… ${Math.min(i+15,ds.length)} of ${ds.length}`);
       const used=[...new Set(chunk.flatMap(d=>byDish[d]))]; const label=new Map(used.map((m,k)=>[m.id,'M'+(k+1)]));
       const prompt=`You check whether dishes suit family members with health conditions. This is general guidance, not medical advice.
 For each listed dish and member, answer:
@@ -2446,6 +2581,25 @@ Reply with JSON only: {"r":[{"d":<dish number>,"m":"M1","s":"ok","p":"","w":"...
       for(const x of (out&&out.r)||[]){ const d=chunk[(+x.d)-1]; const m=inv.get(x.m); if(!d||!m||!RANK.hasOwnProperty(x.s)||x.s==='allergy') continue;
         st.suit[d+'|'+memberSig(m)]={s:x.s,p:typeof x.p==='string'?x.p.slice(0,60):'',w:typeof x.w==='string'?x.w.slice(0,90):'',src:'ai'}; }
       save(); render(); }
+}
+NL.checkDishes=async(dishes,sig,say)=>{ const ms=NL.members(); const todo=[];
+  for(const d of dishes) for(const m of ms){ if(!(needsAI(m)||(m.goals.fodmap&&!RX.INFO[d]))) continue; if(!st.suit[d+'|'+memberSig(m)]) todo.push([d,m]); }
+  if(todo.length&&NL.aiOn()) await checkPairs(todo,sig,say); };
+NL.verdict=verdict;
+let checkCtl=null;
+async function checkFamily(){
+  const w=st.weeks[st.idx]; const ms=NL.members(); const dishes=planDishes(w);
+  if(!dishes.length){ NL.status('Add some dishes first, then check.'); return; }
+  if(!ms.length){ NL.status('No NutriLens profiles found. Add family members as NutriLens profiles.',true); return; }
+  w.checked=true; save(); render();
+  const todo=[]; // [dish, member] pairs that need Gemini
+  for(const d of dishes) for(const m of ms){ if(!(needsAI(m)||(m.goals.fodmap&&!RX.INFO[d]))) continue; if(!st.suit[d+'|'+memberSig(m)]) todo.push([d,m]); }
+  const guestJobs=[]; w.days.forEach((dd,di)=>Object.entries(dd).forEach(([s,list])=>{ if(!NL.guestFor(w,di,s)) return; const note=NL.guestNoteFor(w,di,s); if(!note) return;
+    list.forEach(n=>{ const k=n+'|'+NL.hash(note); if(!st.gsuit[k]) guestJobs.push([n,note,k]); }); }));
+  if((todo.length||guestJobs.length)&&!NL.aiOn()){ NL.status('Gemini isn\'t set up, so only the meal list\'s FODMAP ratings and profile allergies are shown.',true); return; }
+  const btn=$('checkbtn'); checkCtl=new AbortController(); const sig=checkCtl.signal; btn.classList.add('running'); setBtnLabel(btn,'Stop checking');
+  try{
+    await checkPairs(todo,sig);
     for(let i=0;i<guestJobs.length;i+=20){ const chunk=guestJobs.slice(i,i+20); NL.status('Checking guest notes…');
       const prompt=`Guests are coming. For each dish, say whether it needs attention for the guests described. Reply "s": "ok" when it suits every guest; "limit" when some guest should have only a small portion; "no" when some guest shouldn't have it; "allergy" when it may contain something a guest is allergic to. "w": who and why, at most 12 words.
 Reply with JSON only: {"r":[{"n":<number>,"s":"ok","w":"..."}]}
@@ -2453,6 +2607,8 @@ ${chunk.map(([n,note],k)=>`${k+1} | dish: ${n} | guests: ${note}`).join('\n')}`;
       const out=await NL.ai(prompt,{maxTokens:3072,signal:sig});
       for(const x of (out&&out.r)||[]){ const j=chunk[(+x.n)-1]; if(!j||!RANK.hasOwnProperty(x.s)) continue; st.gsuit[j[2]]={s:x.s,w:typeof x.w==='string'?x.w.slice(0,90):''}; }
       save(); render(); }
+    if(ms.some(needsAI)){ const allKeys=w.days.flatMap((dd,di)=>Object.keys(dd).filter(s=>dd[s].length).map(s=>di+'|'+s));
+      if(allKeys.length) await NL.healthAlts(w,allKeys,()=>{},sig); } // alternatives for anyone a planned dish doesn't suit — used to run automatically after every Suggest; now only here
     NL.status(`Checked ${dishes.length} dishes for ${ms.length} member${ms.length>1?'s':''}. Tap an initial for details.`);
   }catch(e){ NL.status(e&&e.code==='cancelled'?'Stopped. Dishes checked so far are kept; press Check for family to continue.':NL.aiErr(e),!(e&&e.code==='cancelled')); }
   finally{ checkCtl=null; btn.classList.remove('running'); setBtnLabel(btn,'Check for family'); render(); }
@@ -2498,18 +2654,48 @@ const TIMETXT={'15':'15 minutes','30':'20–30 minutes','60':'1 hour','120':'2 h
    breakfast excludes upma, pongal; lunch wants greens. A sentence that names no meal applies to every meal. */
 const SLOTNAMES=[['eveningSnack',/evening snack|tea.?time|\bsnacks?\b/],['morningSnack',/morning snack|mid.?morning/],['morningDrink',/morning drink|coffee|\btea\b/],['nightDrink',/night drink|bedtime/],
   ['lunchPacked',/pack(ed)? lunch|lunch ?box|office lunch|school lunch/],['breakfast',/breakfast|tiffin\b/],['dinner',/dinner|supper/],['homeLunch',/\blunch\b/]];
-function boxWishes(w,d,s){ const m=meta(w); const texts=[m.week.suggest,((m.rows||{})[s]||{}).suggest,m.days[d]&&m.days[d].suggest,(m.meals[d+'|'+s]||{}).suggest].filter(Boolean);
-  const no=[], want=[];
-  for(const t of texts) for(const clause of String(t).toLowerCase().split(/[.;\n]+|,\s*(?=(?:breakfast|lunch|dinner|snacks?|evening|morning|night)\b)/)){
-    const named=SLOTNAMES.filter(([,rx])=>rx.test(clause)).map(x=>x[0]); if(named.length&&!named.includes(s)) continue;
+/* exact meal-name words to drop from a plain "I want these" list — NOT the SLOTNAMES detection regex above,
+   which also matches "tea"/"coffee"/"supper" etc. as proxy cues; those are real dish names, so a list like
+   "tea, coffee, dry fruits shake" must keep them. */
+const SLOTEXACT=new Set(['breakfast','lunch','dinner','supper','snack','snacks','tiffin']);
+/* Clause boundary for a suggest box's free text. People write short sentences with periods ("Vegetarian.
+   No upma. Repeat sambar twice.") but just as often string separate thoughts on commas, with no period at
+   all ("vegetarian, no upma, repeat sambar twice") — real text from real use. A comma alone isn't a
+   boundary (it's how "no onion, garlic, ginger" lists items inside ONE clause), but a comma right before a
+   word that starts a new thought — a new exclusion, diet, repeat-limit or "I want" — is: split there too,
+   same as the existing meal-name case ("Breakfast: no upma, Lunch: more greens"), so each thought gets
+   parsed on its own instead of one grab's greedy match swallowing the next clause's words. */
+const CLAUSESPLIT=/[.;\n]+|,\s*(?=(?:breakfast|lunch|dinner|snacks?|evening|morning|night|no|not|avoid|without|don'?t want|do not want|dont|skip|except|never|hate|dislike|less|vegetarian|vegan|pure veg|only veg|veg only|eggetarian|repeat(?:ing)?|prefer|include|want|love|like|add|more|plenty of|lots of)\b)/;
+function boxWishes(w,d,s){ const m=meta(w); const texts=[[m.week.suggest,false],[((m.rows||{})[s]||{}).suggest,true],[m.days[d]&&m.days[d].suggest,false],[(m.meals[d+'|'+s]||{}).suggest,true]].filter(x=>x[0]);
+  const no=[], want=[]; let diet=null; const limits=[];
+  for(const [t,own] of texts) for(const clause of String(t).toLowerCase().split(CLAUSESPLIT)){
+    const named=SLOTNAMES.filter(([,rx])=>rx.test(clause)).map(x=>x[0]);
+    // a week/day box clause naming a DIFFERENT meal doesn't apply here; a row/meal box is already about
+    // this one slot, so a dish that happens to share a word with another slot's detection cue (chamomile
+    // "tea" in a Night drink box) must not get the whole clause skipped.
+    if(!own&&named.length&&!named.includes(s)) continue;
+    const canList=own||named.length>0; // a row/meal box is already about this one slot; a week/day box needs the meal named
     const body=clause.replace(/^[^:]*:/,m=>SLOTNAMES.some(([,rx])=>rx.test(m))?' ':m);
-    const grab=(rx,arr)=>{ let mm; const r=new RegExp(rx.source,'gi'); while((mm=r.exec(body))){ mm[2].split(/,|\bor\b|\band\b|\/|\bnor\b/).map(x=>x.replace(/\b(dishes|dish|items?|food|foods|please|this week|every day|daily|for (breakfast|lunch|dinner))\b/g,'').trim()).filter(x=>x.length>=3&&x.length<=30).forEach(x=>arr.push(x)); } };
-    grab(/\b(no|avoid|not|without|don'?t want|do not want|skip|except|never|hate|dislike|less)\s+([a-z][a-z ,\/-]*)/,no);
+    // "no biscuit, grapes, orange, cucumber in morning snack" — the trailing meal mention belongs to the
+    // whole list, not to "cucumber" alone; strip it before splitting so every item comes out clean.
+    const trailMeal=/\s*\b(in|for|during|on|at)\s+(the\s+)?(morning|evening|night|mid.?morning)?[ -]?(snacks?|breakfast|lunch(?:box|ed)?|dinner|drinks?|tiffin|supper)\b.*$/i;
+    const grab=(rx,arr)=>{ let mm; const r=new RegExp(rx.source,'gi'); while((mm=r.exec(body))){ mm[2].replace(trailMeal,'').split(/,|\bor\b|\band\b|\/|\bnor\b/).map(x=>x.replace(/\b(dishes|dish|items?|food|foods|please|this week|every day|daily|for (breakfast|lunch|dinner))\b/g,'').trim()).filter(x=>x.length>=3&&x.length<=30).forEach(x=>arr.push(x)); } };
+    // captured BEFORE either grab runs: the plain-list fallback below must fire only when NEITHER grab
+    // matched anything in this clause — otherwise a "no X, Y, Z" clause (fully handled by the no-grab)
+    // gets its own text reprocessed as if it were an unclaimed want-list too.
     const n0=no.length, w0=want.length;
+    grab(/\b(no|avoid|not|without|don'?t want|do not want|skip|except|never|hate|dislike|less)\s+([a-z][a-z ,\/-]*)/,no);
+    // "vegetarian", "pure veg", "no meat" → veg; "eggetarian", "veg + egg" → egg; "vegan"
+    if(/\bvegan\b/.test(body)) diet='vegan'; else if(/\begg ?[ae]?tarian|veg ?(\+|and|with) ?eggs?\b/.test(body)) diet=diet||'egg'; else if(/\b(vegetarian|pure veg|veg only|only veg|no (meat|non ?-?veg|chicken|fish|mutton)|without (meat|non ?-?veg))\b/.test(body)) diet='veg';
+    // "repeat sambar and rasam only twice", "rasam max 2 times a week"
+    { const r=/(?:repeat(?:ing)?\s+|have\s+|make\s+|serve\s+)?([a-z][a-z ,&\/-]*?)\s+(?:only\s+|just\s+|max(?:imum)?\s+|at most\s+|not more than\s+|no more than\s+)?(once|twice|thrice|(\d{1,2})\s*(?:times?|x))\b/g; let mm;
+      while((mm=r.exec(body))){ const k=mm[2]==='once'?1:mm[2]==='twice'?2:mm[2]==='thrice'?3:+mm[3];
+        mm[1].replace(/^(repeat(ing)?|have|make|serve|eat|use)\s+/,'').split(/,|\band\b|&|\//).map(x=>x.trim()).filter(x=>x.length>=3&&!/^(only|just|a|the|week|day)$/.test(x)).forEach(x=>limits.push({t:SIM.tokens(x),k,label:x})); } }
     grab(/\b(prefer|more|include|want|love|like|add|with|use|have|lots of|plenty of)\s+([a-z][a-z ,\/-]*)/,want);
-    // "Lunch: chicken dishes" — a meal name with a plain list and no verb means "I want these"
-    if(named.length&&no.length===n0&&want.length===w0){ const rest=body.replace(/\b(within|under|in|less than|below)\s+\d+.*$/,'').replace(/\b(some|any|a|an|the|dishes|dish|items?|food|foods|please|daily|every day)\b/g,' ');
-      rest.split(/,|\bor\b|\band\b|\//).map(x=>x.trim()).filter(x=>x.length>=3&&x.length<=30&&!SLOTNAMES.some(([,rx])=>rx.test(x))).forEach(x=>want.push(x)); } }
+    // "Lunch: chicken dishes" (week/day box) or a plain list typed straight into a row/meal box
+    // ("biscuit, grapes, orange, cucumber" in Morning snack) with no verb — means "I want these"
+    if(canList&&no.length===n0&&want.length===w0){ const rest=body.replace(trailMeal,'').replace(/\b(within|under|in|less than|below)\s+\d+.*$/,'').replace(/\b(some|any|a|an|the|dishes|dish|items?|food|foods|please|daily|every day)\b/g,' ');
+      rest.split(/,|\bor\b|\band\b|\//).map(x=>x.trim()).filter(x=>x.length>=3&&x.length<=30&&!SLOTEXACT.has(x)).forEach(x=>want.push(x)); } }
   // "don't repeat Wednesday's meals", "different from yesterday", "no repeats"
   const avoidDays=new Set(); let noRepeat=false; const all=texts.join(' . ').toLowerCase();
   const DAYRX='(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun|yesterday|tomorrow|previous day|day before|next day)';
@@ -2517,15 +2703,51 @@ function boxWishes(w,d,s){ const m=meta(w); const texts=[m.week.suggest,((m.rows
   let mm; while((mm=rep.exec(all))){ const dn=mm[1]||mm[2]||mm[3]; if(!dn){ noRepeat=true; continue; }
     const t=dn.toLowerCase(); let di=/yesterday|previous day|day before/.test(t)?d-1:/tomorrow|next day/.test(t)?d+1:DAYS.findIndex(x=>x.toLowerCase().startsWith(t.slice(0,3)));
     if(di>=0&&di<7&&di!==d) avoidDays.add(di); }
-  const toks=x=>SIM.tokens(x); return {no:no.map(toks).filter(t=>t.length),want:want.map(toks).filter(t=>t.length),avoidDays:[...avoidDays],noRepeat}; }
+  const toks=x=>SIM.tokens(x); const specific=x=>!isGeneric(x); // "a sweet", "protein", "a healthy snack": Gemini decides, no name matching
+  return {diet,limits:limits.filter(l=>l.t.length),no:no.map(toks).filter(t=>t.length),want:want.filter(specific).map(toks).filter(t=>t.length),avoidDays:[...avoidDays],noRepeat}; }
 const hasAll=(name,tk)=>{ const nt=SIM.tokens(name); return tk.every(a=>nt.includes(a)); };
 NL.boxWishes=boxWishes;
+/* ---------- Local "Understood:" preview — no AI call, shown as you type ----------
+   Same phrase-extraction as boxWishes above, but for ONE box's own text (not the merged
+   week+row+day+meal stack) and keeping the original phrase text for display, not just tokens. */
+function parseWishText(t){
+  const no=[], want=[]; let diet=null; const limits=[];
+  for(const clause of String(t||'').toLowerCase().split(CLAUSESPLIT)){
+    if(!clause.trim()) continue;
+    const body=clause.replace(/^[^:]*:/,m=>SLOTNAMES.some(([,rx])=>rx.test(m))?' ':m);
+    const trailMeal=/\s*\b(in|for|during|on|at)\s+(the\s+)?(morning|evening|night|mid.?morning)?[ -]?(snacks?|breakfast|lunch(?:box|ed)?|dinner|drinks?|tiffin|supper)\b.*$/i;
+    const grab=(rx,arr)=>{ let mm; const r=new RegExp(rx.source,'gi'); while((mm=r.exec(body))){ mm[2].replace(trailMeal,'').split(/,|\bor\b|\band\b|\/|\bnor\b/).map(x=>x.replace(/\b(dishes|dish|items?|food|foods|please|this week|every day|daily|for (breakfast|lunch|dinner))\b/g,'').trim()).filter(x=>x.length>=3&&x.length<=30).forEach(x=>arr.push(x)); } };
+    const n0=no.length, w0=want.length;
+    grab(/\b(no|avoid|not|without|don'?t want|do not want|skip|except|never|hate|dislike|less)\s+([a-z][a-z ,\/-]*)/,no);
+    if(/\bvegan\b/.test(body)) diet='vegan'; else if(/\begg ?[ae]?tarian|veg ?(\+|and|with) ?eggs?\b/.test(body)) diet=diet||'egg'; else if(/\b(vegetarian|pure veg|veg only|only veg|no (meat|non ?-?veg|chicken|fish|mutton)|without (meat|non ?-?veg))\b/.test(body)) diet='veg';
+    { const r=/(?:repeat(?:ing)?\s+|have\s+|make\s+|serve\s+)?([a-z][a-z ,&\/-]*?)\s+(?:only\s+|just\s+|max(?:imum)?\s+|at most\s+|not more than\s+|no more than\s+)?(once|twice|thrice|(\d{1,2})\s*(?:times?|x))\b/g; let mm;
+      while((mm=r.exec(body))){ const k=mm[2]==='once'?1:mm[2]==='twice'?2:mm[2]==='thrice'?3:+mm[3];
+        mm[1].replace(/^(repeat(ing)?|have|make|serve|eat|use)\s+/,'').split(/,|\band\b|&|\//).map(x=>x.trim()).filter(x=>x.length>=3&&!/^(only|just|a|the|week|day)$/.test(x)).forEach(x=>limits.push({label:x,k})); } }
+    grab(/\b(prefer|more|include|want|love|like|add|with|use|have|lots of|plenty of)\s+([a-z][a-z ,\/-]*)/,want);
+    if(no.length===n0&&want.length===w0){ const rest=body.replace(trailMeal,'').replace(/\b(within|under|in|less than|below)\s+\d+.*$/,'').replace(/\b(some|any|a|an|the|dishes|dish|items?|food|foods|please|daily|every day)\b/g,' ');
+      rest.split(/,|\bor\b|\band\b|\//).map(x=>x.trim()).filter(x=>x.length>=3&&x.length<=30&&!SLOTEXACT.has(x)).forEach(x=>want.push(x)); } }
+  const specific=x=>!isGeneric(x);
+  return {diet,limits,no:[...new Set(no)].map(label=>({label,tokens:SIM.tokens(label)})).filter(x=>x.tokens.length),
+    want:[...new Set(want)].filter(specific).map(label=>({label,tokens:SIM.tokens(label)})).filter(x=>x.tokens.length)}; }
+/* For a specific slot (Meal/Row boxes), resolve each "want"/"no" phrase against real dish names so a
+   mismatch like "peanut" → only "Peanut chutney" is eligible here, not "Roasted peanuts" — shows up
+   before the box is even submitted, instead of silently picking the wrong one. */
+function wishMatches(phrases,bit){
+  const names=Object.keys(RX.INFO).concat(ownList());
+  return phrases.map(({label,tokens})=>{
+    const hits=names.filter(n=>hasAll(n,tokens));
+    const here=hits.filter(n=>!RX.INFO[n]||(RX.INFO[n].bits&bit)||(RX.INFO[n].cuisine==='Drink'&&(bit&NL.SLOTBIT.nightDrink)));
+    const elsewhere=hits.filter(n=>!here.includes(n));
+    return {label,here,elsewhere}; }); }
+NL.parseWishText=parseWishText; NL.wishMatches=wishMatches;
 NL.runSeed=1;
 function slotCandidates(w,d,s,guest,diet,novelty){
   const bit=NL.SLOTBIT[s]; const ms=NL.members(); const fod=!guest&&famHasFodmap(); const out=new Map();
   const wish=boxWishes(w,d,s); const sig=typeof memberSig==='function'?ms.map(m=>memberSig(m)):[]; const notFor={};
   const avoidSet=new Set(wish.noRepeat?w.days.flatMap((dd,di)=>di===d?[]:Object.values(dd).flat()):wish.avoidDays.flatMap(di=>Object.values(w.days[di]).flat()));
-  const add=(n,tag)=>{ if(out.has(n)) return; if(diet&&diet!=='any'&&diet!=='nonveg'&&!NL.dietOkFor(diet,n)) return;
+  if(wish.diet) diet=wish.diet; // "vegetarian" in a box beats the day's food setting
+  const overLimit=n=>wish.limits.some(l=>hasAll(n,l.t)&&limitCount(w,d,s,l.t)>=l.k);
+  const add=(n,tag)=>{ if(out.has(n)) return; if(diet&&diet!=='any'&&diet!=='nonveg'&&!NL.dietOkFor(diet,n)) return; if(overLimit(n)) return;
     const I=RX.INFO[n]; if(fod&&I&&(I.cat==='H'||I.cat==='V')) return;
     if(wish.no.some(tk=>hasAll(n,tk))) return; // "no upma"
     if(avoidSet.has(n)) return; // "don't repeat Wednesday's meals" / "no repeats"
@@ -2550,7 +2772,7 @@ function slotCandidates(w,d,s,guest,diet,novelty){
   const res=new Map([...out].map(e=>[e,rnd2()]).sort((a,b)=>order[a[0][1]]-order[b[0][1]]||a[1]-b[1]).map(x=>x[0])); res.notFor=notFor; return res; }
 function familySummary(){ return NL.members().map((m,i)=>`M${i+1}: goals ${GOALS.filter(([k])=>m.goals[k]).map(x=>x[1]).join(', ')||'none'}; conditions: ${m.conditions||'none'}; diet: ${m.restr.diet}; allergies: ${m.restr.allergens.join(', ')||'none'}`).join('\n')||'No profiles'; }
 function fallbackFill(w,targets){ // no AI: random valid combination from the meal patterns that passes the family limits
-  let n=0; for(const [d,s] of targets){ const guest=NL.guestFor(w,d,s); const diet=NL.dietFor(w,d); const cand=slotCandidates(w,d,s,guest,diet,'fav');
+  let n=0; for(const [d,s] of targets){ const guest=NL.guestFor(w,d,s); const diet=NL.dietFor(w,d,s); const cand=slotCandidates(w,d,s,guest,diet,'fav');
     const combos=combosFor(s,true,true).filter(c=>c.every(x=>cand.has(x))); if(!combos.length) continue;
     const c=combos[Math.floor(Math.random()*combos.length)]; w.days[d][s]=c.slice(); fixCell(w,d,s); n++; } return n; }
 /* Which empty meals do the boxes ask for? "idli for breakfast" → breakfasts only; "Sunday lunch chicken" → that meal only.
@@ -2586,9 +2808,11 @@ Reply with JSON only: {"r":[{"id":"week","all":false,"meals":["0|breakfast"],"un
 NL.fill=async function(scope,statusEl){
   const say=(t,err)=>{ if(statusEl){ statusEl.textContent=t; statusEl.classList.toggle('err',!!err); } NL.status(t,err); };
   const w=st.weeks[st.idx], m=meta(w); if(!scope.keepSeed) NL.runSeed=(Math.random()*2**31)>>>0; // a fresh mix of candidates every time
-  let targets=[]; if(scope.meals) targets=scope.meals.map(([d,s])=>[+d,s]).filter(([d,s])=>scope.replace||!w.days[d][s].length);
+  const addTo=new Set(scope.addTo||[]); // meals to ADD to, keeping what's there
+  let targets=[]; if(scope.meals) targets=scope.meals.map(([d,s])=>[+d,s]).filter(([d,s])=>scope.replace||!w.days[d][s].length||addTo.has(d+'|'+s));
   else for(const d of scope.days) for(const [s] of SLOTS) if(!w.days[d][s].length) targets.push([d,s]);
-  if(!targets.length){ say('Nothing to fill: those meals already have dishes. Use a meal\'s ⚙ → “Suggest again” to replace one, or clear them first.'); return; }
+  if(!targets.length){ if(!scope.noUndo) NL.weekUndo(); const n=applyMustAdds(w,scope); if(!n&&!scope.noUndo) undo.pop(); if(n){ save(); render(); say(`Added to ${n} meal${n>1?'s':''}, keeping what was there.`); NL.closeDlg(); return; }
+    say('Nothing to fill: those meals already have dishes. Use a meal\'s ⚙ → “Suggest again” to replace one, or clear them first.'); return; }
   if(!scope.meals&&!scope.all){ say('Reading your suggest boxes…');
     try{ const r=await pickTargets(w,m,targets.map(([d,s])=>d+'|'+s),[...new Set(targets.map(t=>t[0]))]);
       targets=r.keys.map(k=>{ const [d,s]=k.split('|'); return [+d,s]; }); save(); }
@@ -2596,14 +2820,14 @@ NL.fill=async function(scope,statusEl){
     if(!targets.length){ say('Your suggest boxes don\'t ask for any of the empty meals here. Name the meal or day (for example “idli for breakfast”), or clear the box to fill everything.'); return; } }
   if(!scope.noUndo) NL.weekUndo();
   if(!NL.aiOn()){ const n=fallbackFill(w,targets); save(); render(); say(`Gemini isn't set up, so ${n} meal${n===1?' was':'s were'} filled from the planner's meal patterns.`); return; }
-  const wk=m.week; const novelty=wk.novelty||'mix';
-  const wantsNew=novelty==='new'||/\bnew\b|try something|different|never (made|cooked)|not in (the|my) list/i.test([wk.suggest,...m.days.map(x=>x.suggest||''),...Object.values(m.meals).map(x=>x.suggest||'')].join(' '));
+  const wk=m.week;
+  const wantsNew=addTo.size>0||targets.some(([d,s])=>NL.noveltyFor(w,d,s)==='new')||/\bnew\b|try something|different|never (made|cooked)|not in (the|my) list/i.test([wk.suggest,...m.days.map(x=>x.suggest||''),...Object.values(m.meals).map(x=>x.suggest||'')].join(' '));
   const days=[...new Set(targets.map(t=>t[0]))];
   const placed=[]; let understoodSet=!scope.meals&&!scope.all;
   try{
     for(let i=0;i<days.length;i+=2){ const dChunk=days.slice(i,i+2); const tg=targets.filter(t=>dChunk.includes(t[0]));
       say(`Suggesting ${tg.length} meal${tg.length>1?'s':''} for ${dChunk.map(d=>DAYS[d]).join(' and ')}…`);
-      const cands={}; tg.forEach(([d,s])=>{ cands[d+'|'+s]=slotCandidates(w,d,s,NL.guestFor(w,d,s),NL.dietFor(w,d),novelty); });
+      const cands={}; tg.forEach(([d,s])=>{ cands[d+'|'+s]=slotCandidates(w,d,s,NL.guestFor(w,d,s),NL.dietFor(w,d,s),NL.noveltyFor(w,d,s)); });
       const already=w.days.map((dd,di)=>`${DAYS[di]}: ${SLOTS.map(([k,l])=>dd[k].length?`${l}=${dd[k].join(' + ')}`:'').filter(Boolean).join('; ')||'(empty)'}`).join('\n');
       const prompt=`You plan home meals for a family. Pick dishes for each meal listed under "Meals to fill" (only those meals).
 Rules:
@@ -2612,11 +2836,12 @@ Rules:
 - Suggest boxes: the MEAL box beats the DAY box, the DAY box beats the ROW box (one meal on every day), and the ROW box beats the WEEK box, only where they conflict. Otherwise follow all of them together.
 - Every breakfast, lunch and dinner needs a main item (a tiffin like idli, dosa, upma, pongal, poha, roti, or a rice or millet dish) — a chutney, podi, sambar or egg alone is not a meal.
 - Family meals: prefer dishes that suit every member's goals; never choose a dish that breaks a member's allergy or diet. Guest meals: choose the tastiest crowd-pleasing dishes; family health goals don't restrict them.
-- Respect the food setting of each day (veg/egg/non-veg), time to cook, and "familiar vs new": ${({fav:'mostly favourites (tag F) and familiar dishes',mix:'mostly favourites and familiar dishes, about one less-familiar dish a day',new:'try dishes the family hasn\'t had'})[novelty]}.
+- Respect the food setting, time to cook, and "dishes" setting given for each meal below. "dishes" means: fav = mostly favourites (tag F) and familiar dishes; mix = mostly favourites and familiar dishes, about one less-familiar dish a day; new = try dishes the family hasn't had.
 - If the user cooks only on some days, fill the other days with leftovers of dishes cooked earlier (same names) or no-cook items. If a batch item (like idli batter) has a number of uses, use it in up to that many meals, within 4 days of making it.
 - The suggest boxes are the user's requirements: follow every one of them (dishes to avoid, dishes or ingredients they want more of, times). Dishes tagged [W] match what a box asks for: use them where they fit. [F] = family favourite.
 - A dish tagged [not for Mx] doesn't suit that member (their diet, or their health check). You may still choose it, but then ALSO choose one alternative for that member in "alt" — a dish from the same meal's candidates that suits them and does the same job (e.g. a veg gravy instead of a chicken gravy). Choose the main dish and the alternative so both can be cooked side by side within the meal's time (its time limit if one is given, otherwise a normal time for that meal).
 - If a box asks to use the groceries at home, prefer dishes made mostly from "Groceries already at home"; buying a few extra items is fine unless the box says otherwise. If a box asks for balanced nutrition, give each day enough protein (dal, legumes, eggs, dairy, meat or fish as the diet allows), vegetables and some fruit, and whole grains or millets where they fit.
+- Meals marked ADD ONLY already have dishes the user keeps: list ONLY the dish(es) to add, as the boxes ask (e.g. "add a sweet" → one sweet). Don't repeat what's already there. If the box names a dish that isn't in the candidates, put it in "new".
 - Variety: every day should look different. Rotate the breakfast base (e.g. idli, dosa, upma, pongal, millet dishes, roti/paratha, poha), the rice or grain at lunch, the dal or gravy, and the vegetables. Don't repeat a main dish within 3 days, and use each dish at most twice a week, unless it's a planned leftover or batch item. Look at "Week so far" before choosing.
 - Health: pick what suits the members' goals and conditions listed under Family — for example fewer fried, sweet or rich dishes when someone has diabetes, high cholesterol or a weight goal, and only low-FODMAP-safe choices for a low-FODMAP member in family meals.
 Also report, for each suggest box, the key points you understood (2–5 words each) and any meals the boxes say are for guests.
@@ -2630,7 +2855,7 @@ Groceries already at home (ticked in Groceries): ${Object.entries((st.pantry&&st
 Week so far:
 ${already}
 Meals to fill:
-${tg.map(([d,s])=>{ const k=d+'|'+s; const c=cands[k]; return `${k} = ${DAYS[d]} ${slotLabel(s)} | people ${NL.peopleFor(w,d,s)} | ${NL.guestFor(w,d,s)?'GUEST MEAL'+(NL.guestNoteFor(w,d,s)?' ('+NL.guestNoteFor(w,d,s)+')':''):'family meal'} | food: ${NL.dietFor(w,d)} | time: ${TIMETXT[NL.timeFor(w,d,s)]||'any'}
+${tg.map(([d,s])=>{ const k=d+'|'+s; const c=cands[k]; return `${k} = ${DAYS[d]} ${slotLabel(s)} | people ${NL.peopleFor(w,d,s)} | ${NL.guestFor(w,d,s)?'GUEST MEAL'+(NL.guestNoteFor(w,d,s)?' ('+NL.guestNoteFor(w,d,s)+')':''):'family meal'} | food: ${NL.dietFor(w,d,s)} | time: ${TIMETXT[NL.timeFor(w,d,s)]||'any'} | dishes: ${NL.noveltyFor(w,d,s)}${addTo.has(k)?` | ADD ONLY — already in this meal, keep it: ${w.days[d][s].join(' + ')}`:''}
   candidates: ${[...c].map(([n,t])=>{ const tg=[t==='F'||t==='W'?t:'',...((c.notFor||{})[n]||[]).map(x=>'not for '+x)].filter(Boolean); return tg.length?`${n} [${tg.join(', ')}]`:n; }).join('; ')}`; }).join('\n')}
 Reply with JSON only:
 {"meals":[{"k":"<day|slot key>","dishes":["..."],"alt":[{"dish":"...","for":["M2"]}],"new":[],"why":"at most 12 words"}],"understood":{"week":["..."],"days":{"<day number>":["..."]},"meals":{"<day|slot>":["..."]}},"guests":["<day|slot>"]}`;
@@ -2647,7 +2872,9 @@ Reply with JSON only:
         ds=[...new Set(ds.concat(nw))].slice(0,30);
         if(!NL.guestFor(w,+d,s)&&famHasFodmap()){ let lim=0; ds=ds.filter(n=>{ const cat=catOf(n); if(cat==='P'||cat==='R'){ lim++; return lim<=1; } return true; }); }
         if(!ds.length) continue;
+        const keep=addTo.has(k)?w.days[+d][s].slice():null; if(keep){ ds=ds.filter(n=>!keep.includes(n)); if(!ds.length) continue; } else
         ds=varietyGuard(w,+d,s,ds,c);
+        ds=enforceLimits(w,+d,s,ds); // "sambar only twice": checked as each meal is placed
         // members who can't have a chosen dish get an alternative cooked alongside
         const nf=c.notFor||{}; const need=new Set(ds.flatMap(n=>nf[n]||[])); const altFor={};
         for(const a of (Array.isArray(x.alt)?x.alt:[])){ const dn=String((a&&a.dish)||''); const fr=(Array.isArray(a&&a.for)?a.for:[]).map(String).filter(mm=>need.has(mm));
@@ -2658,9 +2885,11 @@ Reply with JSON only:
           if(pick){ altFor[pick]=(altFor[pick]||[]).concat(mm); need.delete(mm); } }
         const alts=Object.keys(altFor).filter(n=>!ds.includes(n)); ds=ds.concat(alts);
         const ms=NL.members(); w.alt=w.alt||{}; if(Object.keys(altFor).length) w.alt[k]=Object.fromEntries(Object.entries(altFor).map(([n,ids])=>[n,[...new Set(ids)].map(id=>(ms[+id.slice(1)-1]||{}).id).filter(v=>v!=null)])); else delete w.alt[k];
-        w.days[+d][s]=ds; fixCell(w,+d,s); placed.push(k); }
+        ds=enforceLimits(w,+d,s,ds); w.days[+d][s]=keep?keep.concat(ds.filter(n=>!keep.includes(n))):ds; fixCell(w,+d,s); placed.push(k); }
       save(); render(); }
-    { const miss=targets.filter(([d,s])=>!placed.includes(d+'|'+s)&&!w.days[d][s].length); if(miss.length&&!(NL.fillCtl&&NL.fillCtl.signal.aborted)){ const n=fallbackFill(w,miss); miss.forEach(([d,s])=>{ if(w.days[d][s].length){ w.days[d][s]=varietyGuard(w,d,s,w.days[d][s],slotCandidates(w,d,s,NL.guestFor(w,d,s),NL.dietFor(w,d),'mix')); fixCell(w,d,s); placed.push(d+'|'+s); } }); if(n){ save(); render(); } } } // meals Gemini skipped
+    { const miss=targets.filter(([d,s])=>!placed.includes(d+'|'+s)&&!w.days[d][s].length); if(miss.length&&!(NL.fillCtl&&NL.fillCtl.signal.aborted)){ const n=fallbackFill(w,miss); miss.forEach(([d,s])=>{ if(w.days[d][s].length){ w.days[d][s]=enforceLimits(w,d,s,varietyGuard(w,d,s,w.days[d][s],slotCandidates(w,d,s,NL.guestFor(w,d,s),NL.dietFor(w,d,s),'mix'))); fixCell(w,d,s); placed.push(d+'|'+s); } }); if(n){ save(); render(); } } } // meals Gemini skipped
+    { const n=applyMustAdds(w,scope); if(n){ save(); render(); } }
+    // Health check + per-member alternatives no longer run automatically here — press "Check for family" when you want them (NL.healthAlts below, called from checkFamily).
     say(placed.length?`Filled ${placed.length} meal${placed.length>1?'s':''}. Use ⇄ to replace any dish, or Undo.`:'Gemini didn\'t return usable dishes. Try rewording the suggest box.',!placed.length);
     if(placed.length){ NL.closeDlg(); showToast(`Filled ${placed.length} meal${placed.length>1?'s':''} from your suggestions. Undo is here if you don't like them.`); }
   }catch(e){ say(NL.aiErr(e),true); if(!placed.length&&!scope.noUndo) undo.pop(); }
@@ -2697,6 +2926,77 @@ function varietyGuard(w,d,s,ds,cands){ if(!cands||!cands.size) return ds; ds=ds.
   if(MAIN_RX[s]&&!ds.some(n=>isMainFor(n,s))){ const m=pool.find(x=>fresh(x)&&isMainFor(x,s))||pool.find(x=>!ds.includes(x)&&!near.includes(x)&&isMainFor(x,s)); if(m) ds.unshift(m); }
   return [...new Set(ds)].slice(0,30); }
 NL.varietyGuard=varietyGuard;
+
+/* ---------- "add methi kalonji water every day" ----------
+   Dishes a row or meal box (or a week/day box sentence that names the meal) asks to ADD are put into every
+   meal it covers, next to what's already there — nothing is replaced unless "Replace" was ticked.
+   A name that isn't in the master list or your dishes becomes one of your dishes. */
+/* "add one more: tea coffee dry fruits shake pudhina amla water lemon peel water" — no commas after the
+   colon, so this would otherwise be kept (or dropped, if too long) as one unmatched blob. Pull out the
+   dish names we actually recognise instead, longest phrase first. */
+function segmentDishList(text){
+  const words=text.trim().split(/\s+/).filter(Boolean); const names=allDishNames(); const out=[]; let i=0;
+  while(i<words.length){ let hit=null,len=0;
+    for(let k=Math.min(6,words.length-i);k>=1;k--){ const phrase=words.slice(i,i+k).join(' ');
+      const h=findSameName(phrase)||(SIM.find(phrase,names,1).find(x=>x.kind==='same')||{}).n; if(h){ hit=h; len=k; break; } }
+    if(hit){ out.push(hit); i+=len; } else i++; }
+  return [...new Set(out)]; }
+function mustAdds(w,d,s){ const m=meta(w); const out=[];
+  const src=[[((m.rows||{})[s]||{}).suggest,true],[(m.meals[d+'|'+s]||{}).suggest,true],[m.days[d]&&m.days[d].suggest,false],[m.week.suggest,false]];
+  for(const [t,own] of src) if(t) for(const clause of String(t).split(/[.;\n]+/)){ const low=clause.toLowerCase();
+    const named=SLOTNAMES.filter(([,rx])=>rx.test(low)).map(x=>x[0]); if(named.length?!named.includes(s):!own) continue;
+    const r=/\b(?:add|include|also have|plus)\s+(.+)/i.exec(clause); if(!r) continue;
+    let body=r[1].replace(/\b(every ?day|daily|each day|on all days|all days|everyday|every morning|every evening|every night|to (?:the |each |every )?(?:\w+ ?){0,2}|for (?:the |each |every )?(?:\w+ ?){0,2}|in (?:the )?(?:\w+ ?){0,2}|too|also|as well)\b.*$/i,'');
+    const ci=body.indexOf(':'); if(ci>=0) body=body.slice(ci+1); // "add one more: tea, coffee" — the names follow the colon, "one more" is filler
+    for(const piece of body.split(/,|\band\b|\+/)){
+      const nm=piece.replace(/^\s*(a|an|some|the)\s+/i,'').replace(/\s+/g,' ').trim(); if(nm.length<3) continue;
+      if(nm.length<=60) out.push(nm); else segmentDishList(nm).forEach(x=>out.push(x)); } }
+  return [...new Set(out)]; }
+const GENERIC_RX=/\b(dish|dishes|something|anything|side|item|one more|another|sweet|dessert|curry|gravy|vegetable|veggie|veg|protein|salad|fruit|snack|drink|starter|accompaniment|extra|healthy|light|quick|new)\b/i;
+/* "a sweet", "protein", "a healthy snack" are vague — Gemini picks freely, no name matching.
+   "lemon peel drink" or "dry fruits shake" are specific dish names that happen to END in a category
+   word like "drink"/"snack" — those should still be name-matched. The difference: once every filler word
+   (a/an/the/one/more) and category word is stripped, is anything specific left? */
+const GENERIC_WORDS=new Set('dish dishes something anything side item another sweet dessert curry gravy vegetable vegetables veggie veggies veg protein salad fruit fruits snack snacks drink drinks starter accompaniment extra healthy light quick new'.split(' '));
+const GENERIC_FILL=new Set(['a','an','some','one','the','more']);
+const singW=w=>w.length>3&&/s$/.test(w)?w.slice(0,-1):w;
+const isGeneric=x=>{ const words=String(x).toLowerCase().trim().split(/\s+/).filter(Boolean); if(!words.length) return false;
+  return !words.some(w=>!GENERIC_FILL.has(w)&&!GENERIC_WORDS.has(w)&&!GENERIC_WORDS.has(singW(w))); };
+NL.ADD_RX=/\b(add|include|also (?:have|add)|plus|one more|another|extra)\b/i;
+function resolveDish(name,s){ const hit=findSameName(name)||(SIM.find(name,allDishNames(),1).find(h=>h.kind==='same')||{}).n; if(hit) return hit; if(isGeneric(name)) return null; // "add a sweet": Gemini chooses
+  const n=name.charAt(0).toUpperCase()+name.slice(1); if(!st.custom[n]){ st.custom[n]={link:'',note:'Added from a suggest box',slots:[s]}; try{ Store.putDish(n,st.custom[n]).catch(()=>{}); }catch(e){} } return n; }
+function applyMustAdds(w,scope){ const cells=scope.meals?scope.meals.map(([d,s])=>[+d,s]):(scope.days||[]).flatMap(d=>SLOTS.map(([s])=>[d,s])); let n=0;
+  for(const [d,s] of cells){ const want=mustAdds(w,d,s); if(!want.length) continue; const cell=w.days[d][s]; let added=false;
+    for(const nm of want){ const dish=resolveDish(nm,s); if(dish&&!cell.includes(dish)){ cell.push(dish); added=true; } }
+    if(added){ fixCell(w,d,s); n++; } }
+  return n; }
+NL.mustAdds=mustAdds;
+/* every "add …" names a dish we can place directly (no Gemini needed) */
+NL.addsAreSpecific=(w,d,s)=>{ const a=mustAdds(w,d,s); return a.length>0&&a.every(x=>findSameName(x)||!isGeneric(x)); };
+
+/* how many dishes matching these words are already in the week (outside this meal) */
+function limitCount(w,d,s,tk){ let n=0; w.days.forEach((dd,di)=>Object.entries(dd).forEach(([sl,arr])=>{ if(di===d&&sl===s) return; arr.forEach(x=>{ if(hasAll(x,tk)) n++; }); })); return n; }
+function enforceLimits(w,d,s,ds){ const L=boxWishes(w,d,s).limits; if(!L.length) return ds; const used=L.map(l=>limitCount(w,d,s,l.t));
+  return ds.filter(n=>{ let ok=true; L.forEach((l,i)=>{ if(hasAll(n,l.t)){ if(used[i]>=l.k) ok=false; } }); if(ok) L.forEach((l,i)=>{ if(hasAll(n,l.t)) used[i]++; }); return ok; }); }
+
+/* ---------- After planning: check the new dishes against each member's health, and add an alternative
+   for anyone a dish doesn't suit (✕), cooked alongside — like the vegetarian alternatives. ---------- */
+async function healthAlts(w,keys,say,sig){
+  const dishes=[...new Set(keys.flatMap(k=>{ const [d,s]=k.split('|'); return w.days[+d][s]; }))];
+  say('Checking the new dishes against everyone\'s health…'); await NL.checkDishes(dishes,sig,say);
+  const ms=NL.members(); let n=0; const bad=(m,x)=>{ const v=NL.verdict(m,x); return !!v&&(v.s==='no'||v.s==='allergy'); };
+  for(const k of keys){ const [d,s]=k.split('|'); if(NL.guestFor(w,+d,s)) continue; const cell=w.days[+d][s]; w.alt=w.alt||{}; const alt=w.alt[k]||{};
+    for(const m of ms){ const off=cell.filter(x=>bad(m,x)); if(!off.length||off.length===cell.length&&cell.length>3) continue;
+      if(Object.entries(alt).some(([dn,ids])=>ids.includes(m.id)&&cell.includes(dn)&&!bad(m,dn))) continue;
+      const c=slotCandidates(w,+d,s,false,NL.dietFor(w,+d,s),'mix'); const roles=off.flatMap(roleOf);
+      const ok=x=>!cell.includes(x)&&!((c.notFor||{})[x]||[]).length&&!bad(m,x)&&enforceLimits(w,+d,s,cell.concat(x)).includes(x);
+      const known=x=>{ const v=NL.verdict(m,x); return v&&(v.s==='ok'||v.s==='limit'); };
+      const pool=[...c.keys()].filter(ok); const same=x=>roleOf(x).some(r=>roles.includes(r))||off.some(o=>isMainFor(o,s)===isMainFor(x,s)&&SIDE_RX.test(o)===SIDE_RX.test(x));
+      const pick=pool.find(x=>same(x)&&known(x))||pool.find(same)||pool.find(known)||pool[0];
+      if(!pick) continue; cell.push(pick); (w.alt[k]=w.alt[k]||{})[pick]=[...new Set([...((w.alt[k]||{})[pick]||[]),m.id])]; n++; }
+    fixCell(w,+d,s); }
+  w.checked=true; save(); render(); return n; }
+NL.healthAlts=healthAlts;
 
 /* ---------- Cooking time: filter Meal combinations, and keep Suggest within the time ----------
    The master list has no cooking times, so Gemini estimates them once per dish (cached in st.ttime).
@@ -2796,11 +3096,11 @@ NL.timeLimit=null;
   const say=t=>{ if(statusEl){ statusEl.textContent=t; statusEl.classList.remove('err'); } NL.status(t); };
   NL.filling=true; NL.aiNote=say; NL.runSeed=(Math.random()*2**31)>>>0; scope={...scope,keepSeed:true};
   try{
-    if(ask.slot||ask.max){ if(ask.slot) LIB.slot=ask.slot; if(ask.max) LIB.time=ask.max; LIB.open=true; LIB.shown=24; LIB.q=''; const q=$('lib-q'); if(q) q.value=''; saveLib(); renderLib(); }
+    if(ask.slot||ask.max){ if(ask.slot) LIB.slot=ask.slot; if(ask.max) LIB.time=ask.max; LIB.shown=24; LIB.q=''; const q=$('lib-q'); if(q) q.value=''; saveLib(); renderLib(); } // sets the filter for next time you open it — doesn't force it open
     if(ask.max&&NL.aiOn()){ // time only the dishes this Suggest will choose from (not the whole list): a few seconds, not a minute
       const w=st.weeks[st.idx]; const days=scope.meals?scope.meals.map(x=>+x[0]):scope.days; const slots=ask.slot?[ask.slot]:scope.meals?[...new Set(scope.meals.map(x=>x[1]))]:[];
       const names=new Set(); NL.timeLimit=null;
-      for(const d of days) for(const s of slots) for(const n of slotCandidates(w,d,s,NL.guestFor(w,d,s),NL.dietFor(w,d),meta(w).week.novelty||'mix').keys()) names.add(n);
+      for(const d of days) for(const s of slots) for(const n of slotCandidates(w,d,s,NL.guestFor(w,d,s),NL.dietFor(w,d,s),meta(w).week.novelty||'mix').keys()) names.add(n);
       if(names.size){ try{ await ensureTimes([...names],say); }catch(e){ if(e&&e.code==='cancelled') throw e; say(`Couldn't check cooking times (${NL.aiErr(e)}). The time limit goes to Gemini as a request instead.`); } } }
     NL.timeLimit=ask.max?{slot:ask.slot,max:ask.max}:null;
     return await _f.call(this,scope,statusEl);
@@ -2890,23 +3190,39 @@ function groText(){ const {list}=groceryNeed(); const need=list.filter(g=>!hasIt
   for(const [c] of CATS) need.filter(g=>(g.b?'pantry':g.c)===c).forEach(g=>out.push(`${cap(g.name)} – ${amtTxt(g)}`)); return out.join('\n'); }
 const pchip=k=>`<span class="favchip pchip" data-pk="${esc(k)}">${esc(k)} <button type="button" class="pchip-x" data-unpan="${esc(k)}" aria-label="Remove ${esc(k)}">×</button></span>`;
 function addPchip(k){ const p=$('gro-pantry'), w=$('gro-pwrap'); if(!p||p.querySelector(`[data-pk="${CSS.escape(k)}"]`)) return; p.insertAdjacentHTML('beforeend',' '+pchip(k)); if(w) w.hidden=false; }
+/* General grocery list for a week with no dishes yet: tick what you have, then plan the week around it.
+   Pantry basics (salt, oil, common spices) start ticked. */
+const MASTER_GROCERIES={
+  veg:'onion, tomato, potato, carrot, beans, cabbage, cauliflower, brinjal, okra (ladies finger), capsicum, cucumber, beetroot, radish, drumstick, bottle gourd, ridge gourd, snake gourd, bitter gourd, ash gourd, pumpkin, raw banana, sweet potato, yam, colocasia (arbi), green peas, broccoli, zucchini, mushroom, spinach, amaranth (keerai), fenugreek leaves (methi), drumstick leaves, spring onion, coriander leaves, mint leaves, curry leaves, green chilli, ginger, garlic, lemon, small onion (shallots), baby corn, sweet corn, cluster beans, broad beans, plantain stem, banana flower',
+  fruit:'banana, apple, orange, mosambi (sweet lime), papaya, guava, pomegranate, grapes, watermelon, muskmelon, pineapple, mango, sapota (chikoo), pear, kiwi, strawberry, blueberry, jackfruit, custard apple, dragon fruit, amla (gooseberry), dates, coconut, avocado, plum, peach, figs',
+  dairy:'milk, curd, paneer, butter, ghee, cheese, buttermilk, cream, eggs, lactose-free milk, tofu',
+  meat:'chicken, mutton, fish, prawns, crab, chicken mince (keema)',
+  pantry:'rice, idli rice, basmati rice, brown rice, red rice, rava (semolina), wheat flour (atta), maida, rice flour, ragi flour, besan (gram flour), jowar flour, bajra flour, oats, poha (aval), vermicelli (semiya), sabudana, millets (foxtail, little, kodo), quinoa, toor dal, moong dal, urad dal, chana dal, masoor dal, whole moong, rajma, chickpeas (kabuli chana), black chana, horse gram, cowpeas (karamani), green peas (dried), peanuts, cashews, almonds, walnuts, raisins, sesame seeds, flax seeds, chia seeds, pumpkin seeds, tamarind, jaggery, honey, coconut (grated, frozen), tea, coffee, bread, noodles, pasta, papad, pickle, sambar powder, rasam powder, chilli powder, coriander powder, garam masala, biryani masala, pepper, cardamom, cloves, cinnamon, fennel seeds, ajwain, dried red chillies, kasuri methi, soy sauce, tomato ketchup, vinegar',
+  basics:'salt, cooking oil, sesame oil, coconut oil, mustard seeds, cumin seeds, turmeric, asafoetida (hing), sugar, fenugreek seeds'};
+const MASTER_LIST=(()=>{ const out=[]; for(const [c,txt] of Object.entries(MASTER_GROCERIES)) for(const n of txt.split(/,\s*/)){ out.push({key:ikey(n.replace(/\s*\(.*\)$/,'')),name:n,c:c==='basics'?'pantry':c,b:c==='basics',parts:[]}); }
+  const seen=new Set(); return out.filter(g=>g.key&&!seen.has(g.key)&&seen.add(g.key)); })();
 function groDialog(msg){
-  const {list,missing}=groceryNeed(); const need=list.filter(g=>!g.b), basics=list.filter(g=>g.b);
+  const general=!planDishes(st.weeks[st.idx]).length; // empty week: the general grocery list
+  let {list,missing}=groceryNeed(); if(general){ list=MASTER_LIST; missing=[]; } const need=list.filter(g=>!g.b), basics=list.filter(g=>g.b);
   const extra=Object.entries(st.pantry.have).filter(([k,v])=>v.t&&!list.some(g=>g.key===k));
   const toBuy=list.filter(g=>!hasIt(g)).length;
   const row=g=>`<li class="gi${g.b?' basic':''}${hasIt(g)?' have':' needbuy'}"><label class="gck"><input type="checkbox" data-have="${esc(g.key)}"${hasIt(g)?' checked':''} aria-label="I have ${esc(g.name)}"> <b>${esc(cap(g.name))}</b></label>
      <span class="gq">${esc(amtTxt(g))}</span><span class="guse">${esc([...new Set(g.parts.flatMap(p=>p.uses))].slice(0,6).join(', '))}</span></li>`;
   const groups=CATS.map(([c,l])=>{ const items=need.filter(g=>g.c===c); return items.length?`<div class="gcat"><span class="lbl">${l} <span class="opt">(${items.length})</span></span><ul class="glist">${items.map(row).join('')}</ul></div>`:''; }).join('');
-  const body=NL.dlg('Groceries',`Week ${st.idx+1}${st.weeks[st.idx].savedName?' · '+st.weeks[st.idx].savedName:''} · raw ingredients for each meal's headcount · ${toBuy} to buy`,`
+  const haveN=list.filter(g=>!g.b&&hasIt(g)).length;
+  const body=NL.dlg('Groceries',general?`Week ${st.idx+1} · no dishes yet · general list · ${haveN} ticked as at home`:`Week ${st.idx+1}${st.weeks[st.idx].savedName?' · '+st.weeks[st.idx].savedName:''} · raw ingredients for each meal's headcount · ${toBuy} to buy`,`
    <div class="fld"><label class="lbl" for="gro-say">Tell me what you have</label><div class="rp-row"><input id="gro-say" style="flex:1;min-width:180px" placeholder="e.g. I have onion, tomato, rice, apples" autocomplete="off"><button type="button" class="btn sec" id="gro-mic" aria-label="Speak" title="Speak">🎤</button><button type="button" class="btn" id="gro-apply">Tick</button></div><p class="fod" id="gro-hint" style="font-size:12.5px;margin:4px 0 0" hidden>🎤 Tap the mic and list what you have. Say <b>“that's all”</b> (or “done”) when you finish, or tap the mic again.</p></div>
    <p class="rp-status" id="gro-status" role="status" aria-live="polite">${msg?esc(msg):''}</p>
    ${missing.length?`<div class="gmiss"><span>${missing.length} dish${missing.length>1?'es need':' needs'} an ingredient estimate${NL.aiOn()?'':' (Gemini isn\'t set up)'}.</span> <button type="button" class="btn sm" id="gro-est">Estimate ingredients</button><button type="button" class="btn sec sm" id="gro-stop" hidden>Stop</button></div>`:''}
-   ${need.length?`<p class="fod" style="font-size:12.5px;margin:0">Tick what you already have. Unticked items are what you need to buy.</p>${groups}`:planDishes(st.weeks[st.idx]).length?'<p class="fod">Estimate ingredients to see what to buy.</p>':`<div class="gempty"><p class="fod" style="margin:0">This week has no dishes yet. Tell me what you have at home (type it, or tap 🎤 and list it), then plan the week around it.</p><div class="rp-row"><button type="button" class="btn" id="gro-plan">Plan the week with what I have</button></div></div>`}
+   ${general?`<div class="gempty"><p class="fod" style="margin:0">This week has no dishes yet. Tick what you have at home — vegetables and fruits first — or say it with 🎤. Then plan the week around it.</p><div class="rp-row"><button type="button" class="btn" id="gro-plan">Plan the week with what I have</button></div></div><input id="gro-find" type="search" placeholder="Find an item…" autocomplete="off" aria-label="Find an item in the list">${groups}`:need.length?`<p class="fod" style="font-size:12.5px;margin:0">Tick what you already have. Unticked items are what you need to buy.</p>${groups}`:planDishes(st.weeks[st.idx]).length?'<p class="fod">Estimate ingredients to see what to buy.</p>':`<div class="gempty"><p class="fod" style="margin:0">This week has no dishes yet. Tell me what you have at home (type it, or tap 🎤 and list it), then plan the week around it.</p><div class="rp-row"><button type="button" class="btn" id="gro-plan">Plan the week with what I have</button></div></div>`}
    ${basics.length?`<div class="gcat"><span class="lbl">Pantry basics <span class="opt">(assumed in stock; untick if you're out)</span></span><ul class="glist">${basics.map(row).join('')}</ul></div>`:''}
    <div id="gro-pwrap"${extra.length?'':' hidden'}><span class="lbl">${need.length?'Also at home':'At home now'} <span class="opt">(${extra.length})</span></span><p class="favlist" id="gro-pantry">${extra.map(([k])=>pchip(k)).join(' ')}</p></div>
-   <div class="rp-row"><button type="button" class="btn" id="gro-keep">Copy for Keep</button>${navigator.share?'<button type="button" class="btn sec" id="gro-share">Share</button>':''}<button type="button" class="btn sec" id="gro-ing">Dish ingredients</button><button type="button" class="btn sec danger-t" id="gro-clear">Clear list</button></div>
-   <p class="fod" style="font-size:12.5px;margin:0">Copies only the unticked items, one per line. In Google Keep, paste into a new note, then ⋮ → Show checkboxes. Amounts are estimates for typical home recipes.</p>`);
-  body.querySelectorAll('[data-have]').forEach(c=>c.onchange=()=>{ st.pantry.have[c.dataset.have]={t:c.checked}; save(); groDialog(); });
+   <div class="rp-row"><button type="button" class="btn" id="gro-keep"${general?' hidden':''}>Copy for Keep</button>${navigator.share&&!general?'<button type="button" class="btn sec" id="gro-share">Share</button>':''}<button type="button" class="btn sec" id="gro-ing"${general?' hidden':''}>Dish ingredients</button><button type="button" class="btn sec danger-t" id="gro-clear">Clear list</button></div>
+   ${general?'':'<p class="fod" style="font-size:12.5px;margin:0">Copies only the unticked items, one per line. In Google Keep, paste into a new note, then ⋮ → Show checkboxes. Amounts are estimates for typical home recipes.</p>'}`);
+  body.querySelectorAll('[data-have]').forEach(c=>c.onchange=()=>{ st.pantry.have[c.dataset.have]={t:c.checked}; save();
+    const li=c.closest('li'); if(li){ li.classList.toggle('have',c.checked); li.classList.toggle('needbuy',!c.checked); }
+    const sub=$('mpo-sub'); if(sub){ const n=list.filter(g=>!g.b&&hasIt(g)).length, b2=list.filter(g=>!hasIt(g)).length; sub.textContent=general?sub.textContent.replace(/\d+ ticked as at home/,`${n} ticked as at home`):sub.textContent.replace(/\d+ to buy/,`${b2} to buy`); } });
+  const fnd=$('gro-find'); if(fnd) fnd.oninput=()=>{ const q=NL.norm(fnd.value); body.querySelectorAll('.gcat').forEach(cat=>{ let any=0; cat.querySelectorAll('li.gi').forEach(li=>{ const hit=!q||NL.norm(li.textContent).includes(q); li.hidden=!hit; any+=hit; }); cat.hidden=!any; }); };
   const est=$('gro-est'); if(est) est.onclick=async()=>{ est.disabled=true; const stop=$('gro-stop'); const ctl=new AbortController(); stop.hidden=false; stop.onclick=()=>ctl.abort();
     try{ const n=await ensureIngredients(missing,t=>{ $('gro-status').textContent=t; },ctl.signal); groDialog(`Estimated ingredients for ${n} dish${n===1?'':'es'}.`); }
     catch(e){ groDialog(e&&e.code==='cancelled'?'Stopped. Estimates done so far are kept.':NL.aiErr(e)); } };
@@ -2971,7 +3287,7 @@ List keys: ${list.map(g=>g.key).join('; ')}
 User said: <said>${res.unmatched.join(', ').slice(0,400)}</said>
 Reply with JSON only: {"m":[{"key":"onion","have":true}],"unmatched":["..."]}`,{maxTokens:1536});
       const keys=new Set(list.map(g=>g.key)); res={out:local.concat(((out&&out.m)||[]).filter(x=>keys.has(x.key)&&!local.some(l=>l.key===x.key)).map(x=>({key:x.key,have:x.have!==false}))),
-        unmatched:Array.isArray(out&&out.unmatched)?out.unmatched.map(String).slice(0,10):[]}; }
+        unmatched:Array.isArray(out&&out.unmatched)&&(out.unmatched.length||((out&&out.m)||[]).length)?out.unmatched.map(String).slice(0,10):res.unmatched}; } // nothing matched or listed: keep what was said
     catch(e){ /* keep the local result */ } }
   for(const x of res.out) st.pantry.have[x.key]={t:x.have};
   for(const u of res.unmatched){ const k=ikey(u); if(k&&!/^(no|nothing)$/.test(k)) st.pantry.have[k]={t:true}; }

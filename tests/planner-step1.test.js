@@ -36,7 +36,7 @@ function serve() { return new Promise(res => { const s = http.createServer((q, r
     ok(await p.isVisible('#slot-list .slot-row'), 'NutriLens: profile created, meal slots shown');
     await p.fill('#inp-breakfast', 'idli with sambar'); await p.click('#see-btn');
     await p.waitForSelector('#nutr-panel .nutr-row', { timeout: 10000 }); ok(/Daily Nutrients/.test(await p.textContent('#nutr-panel')), 'NutriLens: See Nutrition still works');
-    const menu = async id => { if (vp.width < 768) { await p.click('#global-nl-btn'); await p.waitForTimeout(250); } await p.click(id); };
+    const menu = async id => { if (vp.width < 768 || await p.evaluate(() => document.body.classList.contains('mp-on'))) { await p.click('#global-nl-btn'); await p.waitForTimeout(250); } await p.click(id); };
     await menu('#dnav-chat'); ok(await p.isVisible('#chat-input'), 'NutriLens: Ask Nutritionist opens');
     await menu('#dnav-cook'); ok(await p.isVisible('#cook-url'), 'NutriLens: Cook opens');
     // planner
@@ -48,7 +48,7 @@ function serve() { return new Promise(res => { const s = http.createServer((q, r
     ok(await f.evaluate(() => st.weeks.length === 1 && st.weeks[0].custom && st.weeks[0].days.flatMap(d => Object.values(d)).flat().length === 0), 'starts with an empty week');
     ok(await f.evaluate(() => getComputedStyle(document.querySelector('header')).display === 'none'), 'planner title hidden inside NutriLens');
     // add dishes by typing (works on both layouts)
-    const sel = vp.width < 768 ? '#cards' : '#tbody';
+    const sel = '#tbody'; // the full week table is now shown at every width, scrolled sideways on narrow screens
     await f.click(`${sel} .add[data-a="0|lunchPacked"]`); await f.type(`${sel} input.acin`, 'lemon r'); await p.waitForTimeout(120); await p.keyboard.press('Enter');
     await f.type(`${sel} input.acin`, 'carrot por'); await p.waitForTimeout(120); await p.keyboard.press('Enter'); await p.keyboard.press('Escape');
     ok(await f.evaluate(() => JSON.stringify(st.weeks[0].days[0].lunchPacked)) === '["Lemon rice","Carrot poriyal"]', 'type-to-add works inside NutriLens');
@@ -61,15 +61,23 @@ function serve() { return new Promise(res => { const s = http.createServer((q, r
       await p.mouse.move(a.x + 8, a.y + a.height / 2); await p.mouse.down(); for (let i = 1; i <= 12; i++) await p.mouse.move(a.x + 8 + (t.x + 30 - a.x) * i / 12, a.y + a.height / 2 + (t.y + 12 - a.y) * i / 12); await p.mouse.up(); await p.waitForTimeout(100);
       ok(await f.evaluate(n => !st.weeks[st.idx].days[1].breakfast.includes(n) && st.weeks[st.idx].days[1].homeLunch.includes(n), n), 'drag a dish with a video link to another meal slot works inside NutriLens'); await p.waitForTimeout(400);
     }
+    // ⇄ Replace opens the lightweight type-to-search box, same as + Add
+    await f.click(`${sel} .rp[data-r="0|lunchPacked|0"]`);
+    ok(await f.isVisible(`${sel} input.acin`), 'Replace opens the same inline type-to-search box as + Add');
+    ok(!(await f.isVisible('#rp')), 'the old Replace dialog does not open directly');
+    // its "Browse the full list…" link still reaches the old dialog, with the AI ranking box
+    await f.waitForSelector('#aclist:not([hidden])'); await f.click('#acbrowse');
+    ok(await f.isVisible('#rp') && (await f.textContent('#rp-title')) === 'Replace dish', '"Browse the full list…" still opens the old Replace dialog');
     // Gemini via NutriLens proxy (no personal key)
     lastProxy = null;
-    await f.click(`${sel} .rp[data-r="0|lunchPacked|0"]`); await f.fill('#rp-ai', 'something quick'); await f.click('#rp-find');
+    await f.fill('#rp-ai', 'something quick'); await f.click('#rp-find');
     await f.waitForFunction(() => !document.querySelector('#rp-list .skel'));
     ok(/Gemini ranked 2/.test(await f.$eval('#rp-status', e => e.textContent)) && lastProxy && lastProxy.model === 'gemini-3.5-flash-lite', 'AI ranking uses NutriLens proxy and NutriLens model');
     await p.keyboard.press('Escape');
     // personal key from NutriLens Settings
     await p.evaluate(() => { localStorage.setItem('nl_gemini_key', JSON.stringify('USER-KEY-1')); localStorage.setItem('nl_gemini_model', JSON.stringify('gemini-3.8-flash')); });
-    await f.click(`${sel} .rp[data-r="0|lunchPacked|0"]`); await f.fill('#rp-ai', 'something else'); await f.click('#rp-find'); await f.waitForFunction(() => !document.querySelector('#rp-list .skel'));
+    await f.click(`${sel} .rp[data-r="0|lunchPacked|0"]`); await f.waitForSelector('#aclist:not([hidden])'); await f.click('#acbrowse');
+    await f.fill('#rp-ai', 'something else'); await f.click('#rp-find'); await f.waitForFunction(() => !document.querySelector('#rp-list .skel'));
     ok(directCall && directCall.key === 'USER-KEY-1' && /gemini-3\.8-flash/.test(directCall.url), 'with a personal key in NutriLens Settings, calls Gemini directly with that key and model');
     await p.keyboard.press('Escape'); await p.evaluate(() => { localStorage.removeItem('nl_gemini_key'); localStorage.removeItem('nl_gemini_model'); });
     // backup import from standalone format

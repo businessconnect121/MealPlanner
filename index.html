@@ -1180,6 +1180,14 @@ body {
   .mobile-welcome { display: none; }
 }
 
+/* ── Meal Planner open: give it the full width, on every screen size ──
+   The sidebar's own slide/backdrop CSS already does the right thing by default
+   (hidden until opened); this just stops the ≥768px rule above from forcing it
+   permanently open and pushing/covering the planner. */
+body.mp-on .left-drawer:not(.open) { transform: translateX(-100%) !important; }
+body.mp-on #global-nl-btn { display: flex !important; }
+body.mp-on #scr-main { margin-left: 0 !important; }
+
 /* ── Mobile overrides (≤ 768px) ──────────────────────── */
 @media (max-width: 768px) {
   /* Body: remove side padding so cards go edge-to-edge */
@@ -2285,7 +2293,7 @@ const showScreen = id => {
   } else {
     if (drawer) drawer.classList.remove('drawer-hidden');
     if (backdrop) backdrop.classList.remove('drawer-hidden');
-    if (window.innerWidth >= 768) openDrawer();
+    if (window.innerWidth >= 768 && !document.body.classList.contains('mp-on')) openDrawer();
   }
   window.scrollTo(0, 0);
 };
@@ -2306,8 +2314,8 @@ const switchProfileBtn = () => { S.prevScreen = 'main'; initWelcome(); showScree
 
 /* ── Left Drawer ──────────────────────────────────────── */
 function toggleDrawer() {
-  // On desktop the sidebar is permanent — no toggling needed
-  if (window.innerWidth >= 768) return;
+  // On desktop the sidebar is permanent — no toggling needed (except while the Meal Planner wants it hidden)
+  if (window.innerWidth >= 768 && !document.body.classList.contains('mp-on')) return;
   const drawer = document.getElementById('left-drawer');
   const isOpen = drawer.classList.contains('open');
   if (isOpen) { closeDrawer(); } else { openDrawer(); }
@@ -2316,7 +2324,7 @@ function toggleDrawer() {
 window.addEventListener('resize', () => {
   const drawer = document.getElementById('left-drawer');
   if (drawer?.classList.contains('drawer-hidden')) return; // welcome screen — don't show
-  if (window.innerWidth >= 768) {
+  if (window.innerWidth >= 768 && !document.body.classList.contains('mp-on')) {
     openDrawer();
   } else {
     // Close if it was auto-opened by desktop logic
@@ -2333,8 +2341,8 @@ function openDrawer() {
   if (el && p) el.textContent = p.name || '';
 }
 function closeDrawer() {
-  // On desktop the sidebar is always visible — don't close it
-  if (window.innerWidth >= 768) return;
+  // On desktop the sidebar is always visible — don't close it (except while the Meal Planner wants it hidden)
+  if (window.innerWidth >= 768 && !document.body.classList.contains('mp-on')) return;
   document.getElementById('left-drawer').classList.remove('open');
   document.getElementById('drawer-backdrop').classList.remove('open');
 }
