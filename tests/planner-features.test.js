@@ -10,6 +10,7 @@ function serve() { return new Promise(res => { const s = http.createServer((q, r
   const u = decodeURIComponent(q.url.split('?')[0]); const f = path.join(ROOT, u === '/' ? 'index.html' : u);
   if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { r.writeHead(404); r.end(); return; }
   r.writeHead(200, { 'content-type': f.endsWith('.js') ? 'text/javascript' : 'text/html' }); fs.createReadStream(f).pipe(r); }); s.listen(0, () => res(s)); }); }
+const NL_MAIN = /idli|idly|dosa|dosai|upma|pongal|poha|aval|uttapam|appam|idiyappam|puttu|adai|pesarattu|paratha|roti|chapati|poori|puri|kanji|porridge|oats|bread|toast|sandwich|paniyaram|sevai|semiya|khichdi|kichadi|kozhukattai|cheela|chilla|dhokla|pancake|millet/i;
 const J = o => ({ candidates: [{ content: { parts: [{ text: JSON.stringify(o) }] } }] });
 function gemini(prompt) {
   prompts.push(prompt);
@@ -37,13 +38,16 @@ function gemini(prompt) {
     return J({ r: reqs.map(l => { const [id, rest, ks] = l.split(' | '); const keys = ks.replace('empty meals it can fill: ', '').split(', ').filter(Boolean); const tx = rest.toLowerCase();
       if (/idli for breakfast/.test(tx)) return { id, all: false, meals: keys.filter(k => k.endsWith('|breakfast')), understood: ['Idli', 'Breakfast only'] };
       if (/sunday lunch/.test(tx)) return { id, all: false, meals: keys.filter(k => k === '6|homeLunch'), understood: ['Sunday lunch'], guests: /guests/.test(tx) ? ['6|homeLunch'] : [] };
+      if (/repeat/.test(tx)) return { id, all: false, meals: keys.slice(0, 2), understood: ['No Wednesday repeats'] };
       return { id, all: true, meals: [], understood: ['Idli batter ×6', 'Cook Mon & Wed'] }; }) });
   }
   if (/You plan home meals/.test(prompt)) {
     const blocks = prompt.split('Meals to fill:\n')[1].split('\nReply')[0];
     const ms = [...blocks.matchAll(/^(\d\|\w+) = .*\n  candidates: (.*)$/gm)];
     return J({ meals: ms.map(([, k, c]) => { const raw = c.split('; '); const cs = raw.map(x => x.replace(/ \[[^\]]*\]$/, '')); const guest = /GUEST/.test(blocks.split(k + ' = ')[1].split('\n')[0]);
-      const dishes = guest ? cs.filter(x => /biryani|kesari|payasam|paneer/i.test(x)).slice(0, 3).concat(cs.slice(0, 1)) : cs.slice(0, 2);
+      let dishes = guest ? cs.filter(x => /biryani|kesari|payasam|paneer/i.test(x)).slice(0, 3).concat(cs.slice(0, 1)) : cs.slice(0, 2);
+      if (global.mockSame) dishes = [cs.find(x => /coconut chutney/i.test(x)) || cs.find(x => /filter coffee/i.test(x)) || cs.find(x => /^apple/i.test(x)) || cs[0]];
+      if (global.mockSkip && /\|morningSnack$/.test(k)) dishes = [];
       const alt = []; if (!guest && !global.mockNoAlt) for (const d of dishes) { const r = raw[cs.indexOf(d)] || ''; const mm = r.match(/not for (M\d)/); if (mm) { const j = raw.findIndex(x => !x.includes('not for ' + mm[1]) && !dishes.includes(x.replace(/ \[[^\]]*\]$/, ''))); if (j >= 0) alt.push({ dish: cs[j], for: [mm[1]] }); } }
       return { k, dishes, alt, new: /try new/i.test(prompt) ? ['Millet surprise bowl'] : [], why: 'test' }; }),
       understood: { week: ['Idli batter ×6', 'Cook Mon & Wed'], days: { '6': ['Guests for lunch'] }, meals: {} }, guests: /guests coming sunday lunch/i.test(prompt) ? ['6|homeLunch'] : [] });
@@ -190,7 +194,7 @@ function youtube(url) {
   await p.click('#regen'); await p.check('#wk-keep'); await fillNow('#wk-fill');
   w = await W(); const fp = prompts.filter(x => /You plan home meals/.test(x));
   ok(fp.some(x => /Week box: I have idli batter/.test(x)) && fp.some(x => /Day box \(Sunday\): guests coming/.test(x)) && fp.some(x => /Meal box \(Wednesday Dinner\): light, 15 minutes/.test(x)), 'week, day and meal boxes all sent to Gemini');
-  ok(/MEAL box beats the DAY box, and the DAY box beats the WEEK box/.test(fp[0]), 'precedence rule given: meal > day > week for conflicts');
+  ok(/MEAL box beats the DAY box, the DAY box beats the ROW box \(one meal on every day\), and the ROW box beats the WEEK box/.test(fp[0]), 'precedence rule given: meal > day > row > week for conflicts');
   ok(w.days[0].lunchPacked.join('+') === 'Lemon rice+Carrot poriyal' && w.days[0].homeLunch.join('+') === 'Coconut rice', 'dishes you placed are not replaced');
   const filled = w.days.reduce((a, dd) => a + Object.values(dd).filter(x => x.length).length, 0); ok(filled === 56, `“Keep the dishes already in the week” fills every empty meal (${filled} of 56)`);
   ok(!Object.values(w.days[1]).flat().some(n => /chicken|egg|mutton|fish|prawn/i.test(n) && n !== 'Chicken 65'), 'Tuesday (veg day) got no non-veg suggestions');
@@ -507,6 +511,70 @@ function youtube(url) {
   ok(await p.evaluate(() => { const a = (st.weeks[st.idx].alt || {})['0|homeLunch'] || {}; return Object.keys(a).length > 0 && Object.keys(a).every(n => !NL.isNonveg(n)); }), 'if Gemini forgets, the planner adds a suitable alternative itself');
   ok(prompts.some(x => /Groceries already at home \(ticked in Groceries\): .*onion/.test(x)), 'groceries you ticked are sent, so “plan with the groceries in hand” works');
   await p.evaluate(() => { const m = st.weeks[st.idx].meta; m.week.suggest = ''; m.week.diet = 'any'; save(); });
+
+  console.log('\nVariety guard, complete meals, skipped meals');
+  global.mockSame = true; global.mockSkip = true;
+  await p.click('#regen'); await p.fill('#wk-sug', ''); await p.selectOption('#wk-nov', 'mix'); await p.click('#wk-fill'); await p.waitForFunction(() => !NL.pending, null, { timeout: 40000 }); await p.waitForTimeout(200);
+  global.mockSame = false; global.mockSkip = false;
+  const wv = await W();
+  { const cnt = {}; wv.days.forEach(dd => Object.values(dd).flat().forEach(n => cnt[n] = (cnt[n] || 0) + 1));
+    const coffee = Object.entries(cnt).filter(([n]) => /filter coffee/i.test(n)).reduce((a, [, v]) => a + v, 0);
+    ok(coffee <= 3, `even when Gemini picks the same drink every day, it's swapped for variety (filter coffee ${coffee}× not 7×)`); }
+  ok(wv.days.every(dd => dd.breakfast.some(n => NL_MAIN.test(n))), 'every breakfast has a main item (a chutney alone gets a tiffin added): ' + wv.days.map(dd => dd.breakfast.join('+')).slice(0, 3).join(' | '));
+  ok(wv.days.every(dd => dd.morningSnack.length), 'meals Gemini skipped are filled by the planner (no empty morning snack)');
+  console.log('\nSuggest a whole row');
+  await p.click('#toast-undo');
+  await p.evaluate(() => { const w = st.weeks[st.idx]; w.days.forEach(dd => dd.breakfast = []); save(); render(); });
+  ok(await p.$$eval('#tbody .rowsug', e => e.length) === 8, 'every row has “✨ Suggest row”');
+  await p.click('#tbody .rowsug[data-rs="breakfast"]'); await p.fill('#rw-sug', 'a different tiffin each day, no upma'); await p.click('#rw-fill');
+  await p.waitForFunction(() => !NL.pending, null, { timeout: 30000 }); await p.waitForTimeout(200);
+  { const wr = await W(); ok(wr.days.every(dd => dd.breakfast.length) && !wr.days.some(dd => dd.breakfast.some(n => /upma/i.test(n))), 'Suggest every breakfast fills all 7 breakfasts, following the row box (no upma)');
+    ok(new Set(wr.days.map(dd => dd.breakfast[0])).size >= 5, 'with variety across the days'); }
+  ok(prompts.filter(x => /You plan home meals/.test(x)).some(x => /Row box \(every Breakfast\): a different tiffin each day, no upma/.test(x)), 'row box sent to Gemini');
+  await p.click('#regen'); ok(await p.$('#wk-row') !== null, 'Regenerate box also offers “One meal for every day” (for phones)'); await p.keyboard.press('Escape');
+  console.log('\n12 weeks open');
+  await p.evaluate(() => { for (let i = st.weeks.length; i < 12; i++) st.weeks.push(emptyWeek()); save(); render(); updWeekBtns(); });
+  ok(await p.$$eval('#wktabs .wtab', e => e.length) === 12, '12 weeks can be open at once');
+  await p.click('#newcustom', { force: true }); ok(await p.evaluate(() => st.weeks.length) === 12 && /12 weeks at a time/.test(await p.$eval('#toast-msg', e => e.textContent)), 'a 13th is blocked with a message');
+  await p.evaluate(() => { st.weeks = st.weeks.slice(0, 1); st.idx = 0; save(); render(); updWeekBtns(); });
+
+  console.log('\n“Don\'t repeat Wednesday\'s meals”');
+  ok(await p.evaluate(() => { const w = st.weeks[st.idx]; const m = w.meta; const keep = m.days[3].suggest;
+    const t = q => { m.days[3].suggest = q; const r = NL.boxWishes(w, 3, 'dinner'); return r; };
+    const a = t("don't repeat wednesday meals"), b = t('dont repeat yesterday'), c = t('different from Wednesday'), e = t('no repeats this week'), f = t("Don't repeat Wednesday's dishes");
+    m.days[3].suggest = keep; return a.avoidDays.join() === '2' && b.avoidDays.join() === '2' && c.avoidDays.join() === '2' && e.noRepeat && f.avoidDays.join() === '2'; }), 'understands “don\'t repeat Wednesday meals”, “dont repeat yesterday”, “different from Wednesday”, “no repeats”');
+  await p.evaluate(() => { const w = st.weeks[st.idx]; Object.keys(w.days[3]).forEach(s => w.days[3][s] = []); save(); render(); });
+  await p.click('#thead .dpeople[data-day="3"]'); await p.fill('#dy-sug', "don't repeat wednesday meals"); await p.click('#dy-fill');
+  await p.waitForFunction(() => !NL.pending, null, { timeout: 30000 }); await p.waitForTimeout(200);
+  { const wd = await W(); const wed = new Set(Object.values(wd.days[2]).flat()); const thu = Object.values(wd.days[3]).flat();
+    ok(thu.length > 5 && !thu.some(n => wed.has(n)), `Thursday filled with nothing from Wednesday (${thu.length} dishes, 0 repeats)`); }
+  ok(await p.evaluate(() => SLOTS.every(([s]) => st.weeks[st.idx].days[3][s].length)), 'a general day request fills all 8 meals of the day');
+  await p.click('#thead .dpeople[data-day="3"]'); await p.fill('#dy-sug', ''); await p.click('#dy-save');
+
+  console.log('\nAny number of dishes in a meal');
+  await p.evaluate(() => { const w = st.weeks[st.idx]; w.days[5].dinner = []; const names = Object.keys(RX.INFO).filter(n => RX.INFO[n].bits & 64).slice(0, 30); placeInto(5, 'dinner', names, false); });
+  ok(await p.evaluate(() => st.weeks[st.idx].days[5].dinner.length) === 30 && await p.$$eval('#tbody td[data-cell="5|dinner"] li[data-c]', e => e.length) === 30, '30 dishes in one meal, all shown');
+  await add(5, 'dinner', 'lemon rice'); ok(await p.evaluate(() => st.weeks[st.idx].days[5].dinner.length) === 31, 'and you can keep adding (31st by typing)');
+  ok(prompts.filter(x => /You plan home meals/.test(x)).some(x => /up to 30/.test(x)), 'Suggest may give bigger spreads when asked (up to 30)');
+  await p.evaluate(() => { st.weeks[st.idx].days[5].dinner = []; save(); render(); });
+
+  console.log('\nGroceries for an empty week, and Clear list');
+  await p.evaluate(() => { st.weeks.push(emptyWeek()); st.idx = st.weeks.length - 1; st.pantry.have = {}; save(); render(); });
+  await p.click('#grobtn'); ok(await p.isVisible('#gro-plan') && /no dishes yet/.test(await p.$eval('#mpo-body', e => e.textContent)), 'an empty week asks what you have at home, with “Plan the week with what I have”');
+  await p.fill('#gro-say', 'I have onion, tomato, toor dal, ragi flour'); await p.click('#gro-apply'); await p.waitForTimeout(150);
+  ok(await p.$$eval('#gro-pantry .pchip', e => e.length) === 4 && /Added to what you have at home/.test(await p.$eval('#gro-status', e => e.textContent)), 'typed items are listed under “At home now”');
+  await p.evaluate(() => { window.__sr = []; window.SpeechRecognition = class { constructor() { window.__sr.push(this); } start() {} stop() {} }; }); await p.evaluate(() => groDialog());
+  await p.click('#gro-mic'); await p.evaluate(() => { const r = window.__sr[window.__sr.length - 1]; r.onresult({ resultIndex: 0, results: [{ 0: { transcript: 'paneer' }, isFinal: true, length: 1 }] }); });
+  ok(await p.$$eval('#gro-pantry .pchip', e => e.some(x => /paneer/.test(x.textContent))), 'spoken items appear one by one too');
+  await p.evaluate(() => { const r = window.__sr[window.__sr.length - 1]; r.onresult({ resultIndex: 0, results: [{ 0: { transcript: "carrots that's all" }, isFinal: true, length: 1 }] }); }); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => !!(st.pantry.have.carrot || st.pantry.have.carrots) && !NL.groVoice), '…until “that\'s all”');
+  await p.click('#gro-pantry [data-unpan="tomato"]'); ok(await p.evaluate(() => !st.pantry.have.tomato), '× removes an item');
+  await p.click('#gro-plan'); ok(/Regenerate week/.test(await p.$eval('#mpo-title', e => e.textContent)) && /groceries I have at home/.test(await p.$eval('#wk-sug', e => e.value)), '“Plan the week with what I have” opens Regenerate with that request');
+  await p.click('#wk-fill'); await p.waitForFunction(() => !NL.pending, null, { timeout: 30000 });
+  ok(prompts.filter(x => /You plan home meals/.test(x)).slice(-1)[0].match(/Groceries already at home \(ticked in Groceries\): [^\n]*ragi flour/) !== null, 'the week is planned with your groceries sent to Gemini');
+  await p.click('#grobtn'); await p.click('#gro-clear'); ok(/Tap again/.test(await p.$eval('#gro-clear', e => e.textContent)), 'Clear list asks for a second tap');
+  await p.click('#gro-clear'); ok(await p.evaluate(() => Object.keys(st.pantry.have).length === 0) && /Cleared/.test(await p.$eval('#gro-status', e => e.textContent)), 'second tap clears every tick and item at home');
+  await p.keyboard.press('Escape'); await p.evaluate(() => { st.weeks.pop(); st.idx = 0; save(); render(); });
 
   // phone smoke
   const m = await (await b.newContext({ viewport: { width: 390, height: 844 } })).newPage(); const me = []; m.on('pageerror', e => me.push(e.message));
