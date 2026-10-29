@@ -42,8 +42,10 @@ function gemini(prompt) {
   if (/You plan home meals/.test(prompt)) {
     const blocks = prompt.split('Meals to fill:\n')[1].split('\nReply')[0];
     const ms = [...blocks.matchAll(/^(\d\|\w+) = .*\n  candidates: (.*)$/gm)];
-    return J({ meals: ms.map(([, k, c]) => { const cs = c.split('; ').map(x => x.replace(/ \[F\]$/, '')); const guest = /GUEST/.test(blocks.split(k + ' = ')[1].split('\n')[0]);
-      return { k, dishes: guest ? cs.filter(x => /biryani|kesari|payasam|paneer/i.test(x)).slice(0, 3).concat(cs.slice(0, 1)) : cs.slice(0, 2), new: /try new/i.test(prompt) ? ['Millet surprise bowl'] : [], why: 'test' }; }),
+    return J({ meals: ms.map(([, k, c]) => { const raw = c.split('; '); const cs = raw.map(x => x.replace(/ \[[^\]]*\]$/, '')); const guest = /GUEST/.test(blocks.split(k + ' = ')[1].split('\n')[0]);
+      const dishes = guest ? cs.filter(x => /biryani|kesari|payasam|paneer/i.test(x)).slice(0, 3).concat(cs.slice(0, 1)) : cs.slice(0, 2);
+      const alt = []; if (!guest && !global.mockNoAlt) for (const d of dishes) { const r = raw[cs.indexOf(d)] || ''; const mm = r.match(/not for (M\d)/); if (mm) { const j = raw.findIndex(x => !x.includes('not for ' + mm[1]) && !dishes.includes(x.replace(/ \[[^\]]*\]$/, ''))); if (j >= 0) alt.push({ dish: cs[j], for: [mm[1]] }); } }
+      return { k, dishes, alt, new: /try new/i.test(prompt) ? ['Millet surprise bowl'] : [], why: 'test' }; }),
       understood: { week: ['Idli batter ×6', 'Cook Mon & Wed'], days: { '6': ['Guests for lunch'] }, meals: {} }, guests: /guests coming sunday lunch/i.test(prompt) ? ['6|homeLunch'] : [] });
   }
   if (/List the RAW ingredients, as bought from a shop, for ONE serving/.test(prompt)) {
@@ -88,6 +90,11 @@ function youtube(url) {
   await ctx.route('**/*', route => { const u = route.request().url();
     if (u.includes('/.netlify/functions/gemini')) { const body = JSON.parse(route.request().postData() || '{}'); const txt = body.body.contents[0].parts[0].text;
       if (/You check whether dishes suit/.test(txt) && global.slowCheck) return new Promise(r => setTimeout(r, 1500)).then(() => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(gemini(txt)) })).catch(() => {});
+      if (global.slowPlan && /You plan home meals/.test(txt)) return new Promise(r => setTimeout(r, 700)).then(() => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(gemini(txt)) })).catch(() => {});
+      if (global.fail429 > 0 && /You plan home meals/.test(txt)) { global.fail429--; return route.fulfill({ status: 429, contentType: 'application/json', body: '{}' }); }
+      if (global.garbageOnce && /You plan home meals/.test(txt)) { global.garbageOnce = false; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"meals":[{"k":"0|break' }] } }] }) }); }
+      if (/Estimate how long/.test(txt)) { global.inFlight = (global.inFlight || 0) + 1; global.maxInFlight = Math.max(global.maxInFlight || 0, global.inFlight);
+        return new Promise(r => setTimeout(r, 120)).then(() => { global.inFlight--; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(gemini(txt)) }); }).catch(() => {}); }
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(gemini(body.body.contents[0].parts[0].text)) }); }
     if (u.startsWith('https://www.googleapis.com/youtube/v3/')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(youtube(u)) });
     if (u.includes('/.netlify/functions/meal-master')) return blobRoute(route);
@@ -160,9 +167,14 @@ function youtube(url) {
   const base0 = await filledKeys();
   ok(await p.evaluate(() => !document.getElementById('weekbtn')), 'the separate Suggest week button is gone');
   await p.click('#regen'); ok(/Regenerate week/.test(await p.$eval('#mpo-title', e => e.textContent)) && await p.$('#wk-sug') !== null, 'Regenerate week opens the requirements box first');
-  await p.fill('#wk-sug', 'Breakfast: no upma or pongal. Lunch: more greens and dal.'); await fillNow('#wk-fill');
+  await p.fill('#wk-sug', 'Breakfast: no upma or pongal. Lunch: more greens and dal.'); await p.selectOption('#wk-nov', 'mix'); await fillNow('#wk-fill');
   let wR = await W(); const nAll = wR.days.reduce((a, dd) => a + Object.values(dd).filter(x => x.length).length, 0);
   ok(nAll === 56, `Regenerate week plans every meal (${nAll} of 56)`);
+  ok(!wR.days.some(dd => dd.breakfast.some(n => /upma|pongal/i.test(n))), '“Breakfast: no upma or pongal” → no upma or pongal at breakfast');
+  ok(wR.days.filter(dd => dd.homeLunch.some(n => /keerai|spinach|palak|greens|dal|paruppu/i.test(n))).length >= 5, '“Lunch: more greens and dal” → greens or dal at most lunches');
+  ok(await p.evaluate(() => { const w = st.weeks[st.idx]; NL.runSeed = 11; const a = [...slotCandidates(w, 0, 'breakfast', false, 'any', 'mix').keys()].slice(0, 12).join(); const b = [...slotCandidates(w, 1, 'breakfast', false, 'any', 'mix').keys()].slice(0, 12).join(); NL.runSeed = 12; const c = [...slotCandidates(w, 0, 'breakfast', false, 'any', 'mix').keys()].slice(0, 12).join(); return a !== b && a !== c; }), 'each day and each Regenerate gets a different mix of candidates (not the same list every day)');
+  { const bd = wR.days.map(dd => dd.breakfast[0]); ok(new Set(bd).size >= 5, `breakfasts vary across the week (${new Set(bd).size} different of 7)`); }
+  ok(prompts.filter(x => /You plan home meals/.test(x)).some(x => /Rotate the breakfast base/.test(x) && /follow every one of them/.test(x)), 'Gemini is told to follow every requirement and vary each day');
   ok(prompts.filter(x => /You plan home meals/.test(x)).some(x => /Week box: Breakfast: no upma or pongal\. Lunch: more greens and dal\./.test(x)), 'your requirements are sent with the plan request');
   ok(!(await p.$eval('#mpo', d => d.open)), 'dialog closes after regenerating so the week is visible');
   await p.click('#toast-undo'); ok((await filledKeys()).join() === base0.join() && (await W()).days[0].lunchPacked.join('+') === 'Lemon rice+Carrot poriyal', 'one Undo brings the previous week back');
@@ -404,7 +416,7 @@ function youtube(url) {
   console.log('\nCooking time: Suggest filters Meal combinations');
   await p.evaluate(() => { const w = st.weeks[st.idx]; w.days[0].eveningSnack = []; LIB.open = false; LIB.time = null; LIB.slot = 'breakfast'; renderLib(); save(); render(); });
   await p.click('#tbody .mopt[data-mo="0|eveningSnack"]'); await p.fill('#ml-sug', 'something in 15 mins'); await p.click('#ml-fill');
-  await p.waitForFunction(() => LIB.time === 15 && LIB.tstate !== 'busy' && !document.getElementById('mpo').open, null, { timeout: 15000 }); await p.waitForTimeout(300);
+  await p.waitForFunction(() => LIB.time === 15 && !NL.pending && LIB.tstate === 'ok', null, { timeout: 30000 }); await p.waitForTimeout(300);
   ok(await p.evaluate(() => LIB.open && LIB.slot === 'eveningSnack' && document.getElementById('lib-time').value === '15'), 'meal ⚙ “something in 15 mins” → Meal combinations opens on Evening snack, ⏱ ≤ 15 min');
   ok(await p.evaluate(() => LIB.list.length > 0 && LIB.list.every(c => c.every(n => st.ttime[n] && st.ttime[n].m <= 15 && !st.ttime[n].pre))), 'every listed dish can be made within 15 minutes');
   ok(await p.evaluate(() => LIB.list.some(c => c.length === 1 && RX.INFO[c[0]] && LIB.list.indexOf(c) >= LIB.ownN)) && /Within 15 min/.test(await p.$eval('#lib-count', e => e.textContent)), 'includes more evening-snack dishes from the master list, and says “Within 15 min”');
@@ -431,7 +443,7 @@ function youtube(url) {
   await fire('I have onion', true);
   await p.evaluate(() => window.__sr[window.__sr.length - 1].onend()); // a pause: the browser stops listening
   ok(await p.evaluate(() => window.__sr.length === 2 && NL.groVoice && NL.groVoice.on), 'a pause doesn\'t end it: it keeps listening');
-  ok(await p.evaluate(() => !(st.pantry.have.onion || {}).t), 'nothing ticked yet while you are still talking');
+  ok(await p.evaluate(() => (st.pantry.have.onion || {}).t && document.querySelector('[data-have="onion"]').checked), 'onion is ticked as soon as you say it, while still listening');
   await fire('and carrot that\'s all', true); await p.waitForTimeout(400);
   ok(await p.evaluate(() => !NL.groVoice), 'saying “that\'s all” stops listening');
   ok(await p.evaluate(() => (st.pantry.have.onion || {}).t && (st.pantry.have.carrot || {}).t), 'then everything you said is ticked (onion, carrot)');
@@ -439,6 +451,62 @@ function youtube(url) {
   await p.click('#gro-mic'); await fire('rice', true); await p.click('#gro-mic'); await p.waitForTimeout(300);
   ok(await p.evaluate(() => !NL.groVoice && (st.pantry.have.rice || {}).t), 'tapping the mic again also finishes');
   await p.keyboard.press('Escape');
+
+  console.log('\nGemini busy / cut-off answers, and time limits in Regenerate');
+  await p.evaluate(() => { const w = st.weeks[st.idx]; w.days[3].eveningSnack = []; save(); render(); });
+  global.fail429 = 1; await p.click('#tbody .mopt[data-mo="3|eveningSnack"]'); await p.fill('#ml-sug', ''); await p.click('#ml-fill');
+  await p.waitForFunction(() => /trying again/.test(document.getElementById('b2status').textContent), null, { timeout: 5000 });
+  ok(true, 'when Gemini is busy, it says “Gemini is busy — trying again in 4 s…”');
+  await p.waitForFunction(() => st.weeks[st.idx].days[3].eveningSnack.length > 0, null, { timeout: 15000 });
+  ok(global.fail429 === 0, '…and fills the meal on the same press, no second click needed');
+  await p.keyboard.press('Escape').catch(() => {});
+  await p.evaluate(() => { const w = st.weeks[st.idx]; w.days[3].eveningSnack = []; save(); render(); });
+  global.garbageOnce = true; await p.click('#tbody .mopt[data-mo="3|eveningSnack"]'); await p.click('#ml-fill');
+  await p.waitForFunction(() => st.weeks[st.idx].days[3].eveningSnack.length > 0, null, { timeout: 15000 });
+  ok(!global.garbageOnce, 'an answer cut off half-way is asked again automatically');
+  await p.keyboard.press('Escape').catch(() => {});
+  await p.evaluate(() => { st.ttime = {}; save(); }); global.maxInFlight = 0; const tc0 = global.timeCalls || 0;
+  await p.click('#regen'); await p.fill('#wk-sug', 'evening snacks less than 15 minutes'); await p.selectOption('#wk-nov', 'mix');
+  await p.click('#wk-fill'); await p.waitForFunction(() => !NL.pending, null, { timeout: 30000 }); await p.waitForTimeout(300);
+  const snacks = await p.evaluate(() => st.weeks[st.idx].days.map(d => d.eveningSnack));
+  ok(snacks.every(x => x.length) && await p.evaluate(() => st.weeks[st.idx].days.every(d => d.eveningSnack.every(n => st.ttime[n] && st.ttime[n].m <= 15 && !st.ttime[n].pre))), 'Regenerate “evening snacks less than 15 minutes” fills every evening snack with dishes within 15 min');
+  ok(global.maxInFlight <= 1, 'cooking-time requests go one at a time (no burst that makes Gemini busy)');
+  await p.waitForFunction(() => LIB.tstate === 'ok', null, { timeout: 30000 });
+  ok(await p.evaluate(() => LIB.slot === 'eveningSnack' && LIB.time === 15 && LIB.list.length > 0), 'then Meal combinations shows the full filtered list');
+  await p.evaluate(() => { st.weeks[st.idx].meta.week.suggest = ''; LIB.time = null; save(); renderLib(); });
+
+  console.log('\nSuggest / Regenerate: the box closes at once and the week shows progress');
+  global.slowPlan = true;
+  await p.click('#regen'); await p.fill('#wk-sug', ''); await p.click('#wk-fill'); await p.waitForTimeout(150);
+  ok(!(await p.$eval('#mpo', d => d.open)), 'pressing Regenerate week closes the box straight away');
+  ok(await p.$$eval('td.planning .plan-note', e => e.length) > 10 && await p.isVisible('#b2stop'), 'meals waiting for Gemini show “Planning…”, with a spinner and Stop button above the week');
+  await p.waitForFunction(() => !NL.pending, null, { timeout: 30000 });
+  ok(await p.$$eval('td.planning', e => e.length) === 0 && await p.evaluate(() => st.weeks[st.idx].days.every(d => Object.values(d).every(x => x.length))), 'meals fill in as answers arrive; nothing left “Planning…”');
+  ok(!(await p.isVisible('#b2stop')) && /Filled \d+ meal/.test(await p.$eval('#b2status', e => e.textContent)), 'status says what was filled, Stop button gone');
+  await p.click('#regen'); await p.click('#wk-fill'); await p.waitForTimeout(100); await p.click('#b2stop');
+  await p.waitForFunction(() => !NL.pending, null, { timeout: 15000 });
+  ok(/Stopped/.test(await p.$eval('#b2status', e => e.textContent)), 'Stop cancels it');
+  global.slowPlan = false;
+
+  console.log('\nSelecting text in a box doesn\'t close it');
+  await p.click('#regen'); await p.fill('#wk-sug', 'Breakfast: no upma. Lunch: more greens and dal.');
+  { const ta = await p.locator('#wk-sug').boundingBox(); const dl = await p.locator('#mpo').boundingBox();
+    await p.mouse.move(ta.x + ta.width - 10, ta.y + 12); await p.mouse.down(); await p.mouse.move(ta.x + 5, ta.y + 12, { steps: 4 }); await p.mouse.move(dl.x - 30, dl.y + 40, { steps: 6 }); await p.mouse.up(); }
+  ok(await p.$eval('#mpo', d => d.open), 'drag-selecting text and letting go outside the box keeps it open');
+  await p.mouse.click(5, 5); ok(!(await p.$eval('#mpo', d => d.open)), 'a real click outside still closes it');
+
+  console.log('\nSomeone can\'t have a dish → an alternative alongside');
+  await p.evaluate(() => { const w = st.weeks[st.idx]; const m = w.meta; m.week.suggest = 'Lunch: chicken dishes'; m.week.novelty = 'mix'; m.week.diet = 'nonveg'; m.days.forEach(x => { x.diet = ''; x.suggest = ''; }); w.days[0].homeLunch = []; save(); render(); });
+  await p.click('#tbody .mopt[data-mo="0|homeLunch"]'); await p.fill('#ml-sug', ''); await p.click('#ml-fill'); await p.waitForFunction(() => !NL.pending, null, { timeout: 30000 }); await p.waitForTimeout(200);
+  let lunch = await p.evaluate(() => st.weeks[st.idx].days[0].homeLunch); const alt0 = await p.evaluate(() => (st.weeks[st.idx].alt || {})['0|homeLunch'] || {});
+  ok(lunch.some(n => /chicken/i.test(n)) && Object.keys(alt0).length && Object.keys(alt0).every(n => !/chicken|egg|mutton|fish|prawn/i.test(n)), `a chicken dish for the family plus a veg alternative for Ravi (${lunch.join(' + ')})`);
+  ok(/for Ravi/.test(await p.$eval('#tbody td[data-cell="0|homeLunch"]', e => e.textContent)), 'the alternative is labelled “for Ravi” in the week');
+  ok(prompts.filter(x => /You plan home meals/.test(x)).some(x => /not for M2/.test(x) && /cooked side by side within the meal's time/.test(x)), 'Gemini is told who can\'t have which dish, and to keep both within the meal\'s time');
+  global.mockNoAlt = true; await p.evaluate(() => { st.weeks[st.idx].days[0].homeLunch = []; save(); render(); });
+  await p.click('#tbody .mopt[data-mo="0|homeLunch"]'); await p.click('#ml-fill'); await p.waitForFunction(() => !NL.pending, null, { timeout: 30000 }); await p.waitForTimeout(200); global.mockNoAlt = false;
+  ok(await p.evaluate(() => { const a = (st.weeks[st.idx].alt || {})['0|homeLunch'] || {}; return Object.keys(a).length > 0 && Object.keys(a).every(n => !NL.isNonveg(n)); }), 'if Gemini forgets, the planner adds a suitable alternative itself');
+  ok(prompts.some(x => /Groceries already at home \(ticked in Groceries\): .*onion/.test(x)), 'groceries you ticked are sent, so “plan with the groceries in hand” works');
+  await p.evaluate(() => { const m = st.weeks[st.idx].meta; m.week.suggest = ''; m.week.diet = 'any'; save(); });
 
   // phone smoke
   const m = await (await b.newContext({ viewport: { width: 390, height: 844 } })).newPage(); const me = []; m.on('pageerror', e => me.push(e.message));

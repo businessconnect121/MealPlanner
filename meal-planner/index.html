@@ -196,7 +196,7 @@ li[data-c] a,li[data-c] .dn,#lib-rows .dchip{-webkit-user-drag:none;user-drag:no
 .bar2{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-top:-10px}
 .bar2 .bbtn{padding:6px 12px;font-size:13.5px}
 .b2status{font-size:12.5px;color:var(--muted);flex-basis:100%}
-.b2status:empty{display:none}
+
 .b2status.err{color:var(--turm)}
 .viewas select{font:inherit;font-size:13.5px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--ink);padding:6px 10px}
 /* favourites */
@@ -304,6 +304,21 @@ td li .dn{flex:1 1 0;min-width:0}td li .btns{flex:none}
 @media (max-width:760px){.lib.timed .lib-count{display:block;font-size:12px}.lib-t{flex:1 1 100%}.lib-t select{width:100%}}
 .chk{display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer}
 #gro-mic.listening{background:var(--no-bg);border-color:var(--no);color:var(--no);animation:mpPulse 1.2s ease-in-out infinite}@keyframes mpPulse{50%{opacity:.55}}@media (prefers-reduced-motion:reduce){#gro-mic.listening{animation:none}}
+.gi.just{animation:mpTick .6s ease-out}@keyframes mpTick{0%{background:var(--leaf-bg)}100%{background:transparent}}
+/* background planning */
+.b2status{display:flex;align-items:center;gap:8px}
+.b2status:not(.show){display:none}
+.b2status .b2spin{display:none;width:13px;height:13px;border:2px solid var(--line);border-top-color:var(--leaf);border-radius:50%;animation:mpSpin .8s linear infinite;flex:none}
+.b2status.busy .b2spin{display:inline-block}
+.b2status #b2stop{display:none}
+.b2status.busy #b2stop{display:inline}
+.b2status.busy{color:var(--ink);font-weight:600}
+@keyframes mpSpin{to{transform:rotate(360deg)}}
+td.planning,[data-cell].planning{background:linear-gradient(90deg,transparent 0%,var(--leaf-bg) 50%,transparent 100%);background-size:200% 100%;animation:mpShimmer 1.4s linear infinite}
+.plan-note{display:block;font-size:11.5px;color:var(--leaf);font-weight:600;margin-top:2px}
+@keyframes mpShimmer{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){td.planning,[data-cell].planning,.b2status .b2spin{animation:none}}
+.alttag{display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;font-size:11px;font-weight:600;background:var(--leaf-bg);color:var(--leaf);white-space:nowrap}
 
 /* Replace action + panel */
 td li{display:flex;align-items:flex-start;gap:6px;justify-content:space-between}
@@ -566,7 +581,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.body.appendChild(d);
   const $s=id=>document.getElementById(id);
   btn.onclick=()=>{ $s('bk-status').textContent=''; d.showModal(); $s('bk-export').focus(); };
-  $s('set-x').onclick=()=>d.close(); d.addEventListener('click',e=>{ if(e.target===d) d.close(); });
+  $s('set-x').onclick=()=>d.close(); d.addEventListener('click',e=>{ if(backdropClick(e,d)) d.close(); });
   $s('bk-export').onclick=()=>{
     const data={app:'meal-planner',version:1,exportedAt:new Date().toISOString(),state:st,saved:(()=>{try{return JSON.parse(localStorage.getItem('lf-saved-v1')||'[]')}catch(e){return []}})()};
     const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'}); const a=document.createElement('a');
@@ -922,7 +937,7 @@ const SIM=(()=>{
     ['curd','yogurt','yoghurt','thayir','dahi','perugu','mosaru'],['buttermilk','moru','mor','chaas','chhaas','majjiga','neer mor'],
     ['drink','juice','cooler','sharbat','sherbet','sarbath','sarbat'],
     ['brinjal','eggplant','aubergine','kathirikai','kathrikai','baingan','vankaya'],['okra','ladies finger','lady finger','vendakkai','vendaikai','bhindi','bendakaya'],
-    ['potato','urulai','urulaikizhangu','aloo','alu'],['spinach','keerai','palak'],['bitter gourd','pavakkai','paavakkai','karela','kakarakaya'],
+    ['potato','urulai','urulaikizhangu','aloo','alu'],['spinach','keerai','palak','greens','leafy greens','leafy','green leafy'],['bitter gourd','pavakkai','paavakkai','karela','kakarakaya'],
     ['bottle gourd','sorakkai','surakkai','lauki','dudhi','sorakai'],['ash gourd','poosanikai','winter melon','petha','white pumpkin'],
     ['snake gourd','pudalangai','padwal'],['ridge gourd','peerkangai','turai','beerakaya'],['pumpkin','parangikai','kaddu','mathan'],
     ['raw banana','vazhakkai','plantain','kacha kela'],['banana stem','vazhaithandu'],['banana flower','vazhaipoo'],
@@ -1042,7 +1057,7 @@ function openRp(di,slot,i,btn){
 }
 function closeRp(){ if(ctl){ctl.abort();ctl=null;} if(dlg.open) dlg.close(); }
 dlg.addEventListener('close',()=>{ if(ctl){ctl.abort();ctl=null;} if(ctx&&!ctx.replaced){ const b=[...document.querySelectorAll(ctx.focusSel)].find(b=>b.offsetParent); if(b) b.focus(); } });
-dlg.addEventListener('click',e=>{ if(e.target===dlg) closeRp(); });
+dlg.addEventListener('click',e=>{ if(backdropClick(e,dlg)) closeRp(); });
 $('rp-x').onclick=closeRp;
 function opts(withText){ return {week:ctx.w,day:ctx.day,slot:ctx.slot,i:ctx.i,pref,query:$('rp-q').value,have:$('rp-have').value,text:withText?$('rp-ai').value:''}; }
 function runLocal(withText){
@@ -1348,7 +1363,7 @@ $('sp-list').addEventListener('click',async e=>{
     catch(e){ spStatus('Couldn\'t delete the plan. Try again in a moment.',true); } }
 });
 $('sp-x').onclick=()=>sp.close();
-sp.addEventListener('click',e=>{ if(e.target===sp) sp.close(); });
+sp.addEventListener('click',e=>{ if(backdropClick(e,sp)) sp.close(); });
 sp.addEventListener('close',()=>{ pending=null; });
 $('savebtn').onclick=()=>openPlans(true);
 $('plansbtn').onclick=()=>openPlans(false);
@@ -1694,6 +1709,8 @@ function weekTabs(){ const el=$('wktabs'); if(!el) return;
   const w=st.weeks[st.idx]; $('wklabel').textContent=`Week ${st.idx+1}`+(w.savedName?` · ${w.savedName}`:w.custom?' · custom':''); updWeekBtns(); }
 $('wktabs').addEventListener('click',e=>{ const b=e.target.closest('.wtab'); if(!b) return; st.idx=+b.dataset.w; save(); render(); });
 
+const downOn=new WeakMap(); document.addEventListener('pointerdown',e=>{ const d=e.target.closest&&e.target.closest('dialog'); if(d) downOn.set(d,e.target); },true);
+const backdropClick=(e,d)=>e.target===d&&downOn.get(d)===d;
 /* Toolbar icons: labels stay for screen readers; on phones only the icons show */
 (function(){
   const P={regen:'<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',
@@ -1725,8 +1742,22 @@ const NL={hooks:[],after(fn){ this.hooks.push(fn); }};
 { const _r=render; render=function(){ _r.apply(this,arguments); for(const f of NL.hooks){ try{ f(); }catch(e){ console.error('planner hook',e); } } }; }
 NL.ls=k=>{ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } };
 NL.aiOn=()=>!!(window.__AI&&window.__AI.available);
-NL.ai=async(prompt,opts={})=>{ const t=await GEM.call(prompt,opts); try{ return JSON.parse(t.replace(/^```(?:json)?\s*|\s*```$/g,'')); }catch(e){ throw {code:'bad_output'}; } };
-NL.aiErr=e=>({not_configured:'Gemini isn\'t set up (NutriLens Settings, or the server key).',bad_key:'Gemini refused the API key (NutriLens Settings).',rate_limited:'Gemini is busy. Try again in a minute.',cancelled:'Stopped.',bad_output:'Gemini gave an answer the planner couldn\'t use. Try again.'})[e&&e.code]||'Couldn\'t reach Gemini. Try again.';
+/* Gemini as JSON, with patience: "busy" (429) and overloaded answers are retried after a short wait
+   (4 s, 10 s, 20 s), and an answer cut off half-way is asked again with more room. */
+const aiParse=t=>{ t=String(t||'').replace(/^```(?:json)?\s*|\s*```$/g,''); try{ return JSON.parse(t); }catch(e){}
+  const a=t.indexOf('{'), b=t.lastIndexOf('}'); if(a>=0&&b>a){ try{ return JSON.parse(t.slice(a,b+1)); }catch(e){} } return null; };
+const aiSleep=(ms,signal)=>new Promise((res,rej)=>{ const id=setTimeout(res,ms); if(signal) signal.addEventListener('abort',()=>{ clearTimeout(id); rej({code:'cancelled'}); },{once:true}); });
+NL.aiNote=null; // set by whoever is showing progress
+NL.ai=async(prompt,opts={})=>{ let mt=opts.maxTokens||2048; if(!opts.signal&&NL.fillCtl) opts={...opts,signal:NL.fillCtl.signal}; // Stop cancels whatever Suggest is waiting for
+  for(let a=0;;a++){
+    try{ const j=aiParse(await GEM.call(prompt,{...opts,maxTokens:mt})); if(j&&typeof j==='object') return j; throw {code:'bad_output'}; }
+    catch(e){ const c=e&&e.code; if(!['rate_limited','unavailable','bad_output'].includes(c)||a>=3) throw e;
+      if(c==='bad_output') mt=Math.min(mt*2,32768);
+      const wait=c==='rate_limited'?[4000,10000,20000][a]:c==='unavailable'?[2000,5000,10000][a]:300;
+      const note=c==='bad_output'?'Gemini\'s answer was cut off — asking again…':`Gemini is busy — trying again in ${Math.round(wait/1000)} s…`;
+      try{ (NL.aiNote||NL.status)(note); }catch(_){}
+      await aiSleep(wait,opts.signal); } } };
+NL.aiErr=e=>({not_configured:'Gemini isn\'t set up (NutriLens Settings, or the server key).',bad_key:'Gemini refused the API key (NutriLens Settings).',rate_limited:'Gemini is still busy after several tries. Wait a minute and try again.',cancelled:'Stopped.',bad_output:'Gemini gave an answer the planner couldn\'t use. Try again.'})[e&&e.code]||'Couldn\'t reach Gemini. Try again.';
 NL.hash=s=>{ let h=2166136261; for(const c of String(s)){ h^=c.charCodeAt(0); h=Math.imul(h,16777619); } return (h>>>0).toString(36); };
 NL.norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 NL.SLOTBIT={morningDrink:1,breakfast:2,morningSnack:4,lunchPacked:8,homeLunch:16,eveningSnack:32,dinner:64,nightDrink:128};
@@ -1804,7 +1835,7 @@ NL.status=(t,err)=>{ const e=$('b2status'); e.textContent=t||''; e.classList.tog
 /* ---------- generic option dialog ---------- */
 { const d=document.createElement('dialog'); d.className='rpd'; d.id='mpo'; d.setAttribute('aria-labelledby','mpo-title');
   d.innerHTML='<div class="rp-in"><div class="rp-top"><div><h2 id="mpo-title"></h2><p class="rp-orig" id="mpo-sub"></p></div><button type="button" class="rp-x" id="mpo-x" aria-label="Close">×</button></div><div id="mpo-body" class="mpo-body"></div></div>';
-  document.body.appendChild(d); $('mpo-x').onclick=()=>d.close(); d.addEventListener('click',e=>{ if(e.target===d) d.close(); }); }
+  document.body.appendChild(d); $('mpo-x').onclick=()=>d.close(); d.addEventListener('click',e=>{ if(backdropClick(e,d)) d.close(); }); }
 NL.dlg=(title,sub,html)=>{ $('mpo-title').textContent=title; $('mpo-sub').textContent=sub||''; $('mpo-body').innerHTML=html; const d=$('mpo'); if(!d.open) d.showModal(); return $('mpo-body'); };
 NL.closeDlg=()=>{ const d=$('mpo'); if(d.open) d.close(); };
 NL.weekUndo=()=>undo.push({t:'snap',w:st.idx,before:JSON.stringify(st.weeks[st.idx])});
@@ -1923,7 +1954,7 @@ async function regenerate(keep,statusEl){
   const wasOpen=$('mpo').open;
   await NL.fill({days:[0,1,2,3,4,5,6],all:true,noUndo:true},statusEl);
   const w=st.weeks[idx]; const any=w.days.some(d=>Object.values(d).some(x=>x.length));
-  if(!keep&&!any){ st.weeks[idx]=JSON.parse(before); undo.pop(); save(); render(); if(statusEl&&!statusEl.textContent) statusEl.textContent='Nothing was planned, so your week is unchanged.'; return; }
+  if(!keep&&!any){ st.weeks[idx]=JSON.parse(before); undo.pop(); save(); render(); if(!$('b2status').classList.contains('err')) NL.status('Nothing was planned, so your week is unchanged.'); else NL.status($('b2status').querySelector('.b2txt').textContent+' Your week is unchanged.',true); return; }
   if(!keep&&old.savedName&&!$('mpo').open&&wasOpen) showToast(`Week regenerated. Your saved plan “${old.savedName}” is unchanged. Undo is here if you don't like it.`);
 }
 NL.regenerate=regenerate; NL.openWeek=openWeek;
@@ -2435,18 +2466,51 @@ NL.after(()=>{
    master list. It may add new dishes only when asked for new ideas. Only empty meals are filled, unless a
    meal's own "Suggest again" is used. */
 const TIMETXT={'15':'15 minutes','30':'20–30 minutes','60':'1 hour','120':'2 hours','180':'up to 3 hours (batch cooking)'};
+/* What the boxes say for one meal: "Breakfast: no upma or pongal. Lunch: more greens" →
+   breakfast excludes upma, pongal; lunch wants greens. A sentence that names no meal applies to every meal. */
+const SLOTNAMES=[['eveningSnack',/evening snack|tea.?time|\bsnacks?\b/],['morningSnack',/morning snack|mid.?morning/],['morningDrink',/morning drink|coffee|\btea\b/],['nightDrink',/night drink|bedtime/],
+  ['lunchPacked',/pack(ed)? lunch|lunch ?box|office lunch|school lunch/],['breakfast',/breakfast|tiffin\b/],['dinner',/dinner|supper/],['homeLunch',/\blunch\b/]];
+function boxWishes(w,d,s){ const m=meta(w); const texts=[m.week.suggest,m.days[d]&&m.days[d].suggest,(m.meals[d+'|'+s]||{}).suggest].filter(Boolean);
+  const no=[], want=[];
+  for(const t of texts) for(const clause of String(t).toLowerCase().split(/[.;\n]+|,\s*(?=(?:breakfast|lunch|dinner|snacks?|evening|morning|night)\b)/)){
+    const named=SLOTNAMES.filter(([,rx])=>rx.test(clause)).map(x=>x[0]); if(named.length&&!named.includes(s)) continue;
+    const body=clause.replace(/^[^:]*:/,m=>SLOTNAMES.some(([,rx])=>rx.test(m))?' ':m);
+    const grab=(rx,arr)=>{ let mm; const r=new RegExp(rx.source,'gi'); while((mm=r.exec(body))){ mm[2].split(/,|\bor\b|\band\b|\/|\bnor\b/).map(x=>x.replace(/\b(dishes|dish|items?|food|foods|please|this week|every day|daily|for (breakfast|lunch|dinner))\b/g,'').trim()).filter(x=>x.length>=3&&x.length<=30).forEach(x=>arr.push(x)); } };
+    grab(/\b(no|avoid|not|without|don'?t want|do not want|skip|except|never|hate|dislike|less)\s+([a-z][a-z ,\/-]*)/,no);
+    const n0=no.length, w0=want.length;
+    grab(/\b(prefer|more|include|want|love|like|add|with|use|have|lots of|plenty of)\s+([a-z][a-z ,\/-]*)/,want);
+    // "Lunch: chicken dishes" — a meal name with a plain list and no verb means "I want these"
+    if(named.length&&no.length===n0&&want.length===w0){ const rest=body.replace(/\b(within|under|in|less than|below)\s+\d+.*$/,'').replace(/\b(some|any|a|an|the|dishes|dish|items?|food|foods|please|daily|every day)\b/g,' ');
+      rest.split(/,|\bor\b|\band\b|\//).map(x=>x.trim()).filter(x=>x.length>=3&&x.length<=30&&!SLOTNAMES.some(([,rx])=>rx.test(x))).forEach(x=>want.push(x)); } }
+  const toks=x=>SIM.tokens(x); return {no:no.map(toks).filter(t=>t.length),want:want.map(toks).filter(t=>t.length)}; }
+const hasAll=(name,tk)=>{ const nt=SIM.tokens(name); return tk.every(a=>nt.includes(a)); };
+NL.boxWishes=boxWishes;
+NL.runSeed=1;
 function slotCandidates(w,d,s,guest,diet,novelty){
   const bit=NL.SLOTBIT[s]; const ms=NL.members(); const fod=!guest&&famHasFodmap(); const out=new Map();
+  const wish=boxWishes(w,d,s); const sig=typeof memberSig==='function'?ms.map(m=>memberSig(m)):[]; const notFor={};
   const add=(n,tag)=>{ if(out.has(n)) return; if(diet&&diet!=='any'&&diet!=='nonveg'&&!NL.dietOkFor(diet,n)) return;
-    if(!guest&&ms.some(m=>NL.hardBlock(m,n))) return; const I=RX.INFO[n];
-    if(fod&&I&&(I.cat==='H'||I.cat==='V')) return; out.set(n,tag); };
+    const I=RX.INFO[n]; if(fod&&I&&(I.cat==='H'||I.cat==='V')) return;
+    if(wish.no.some(tk=>hasAll(n,tk))) return; // "no upma"
+    const nf=[]; if(!guest) for(let i=0;i<ms.length;i++){ const hb=NL.hardBlock(ms[i],n);
+      if(hb&&/allergy|intolerance/.test(hb)) return; // allergies: never in a family meal
+      const a=sig[i]&&(st.suit||{})[n+'|'+sig[i]]; if(hb||(a&&a.s==='no')) nf.push('M'+(i+1)); } // diet or health: allowed, with an alternative for them
+    if(ms.length&&nf.length>=ms.length) return;
+    out.set(n,tag); if(nf.length) notFor[n]=nf; };
+  // dishes matching what the boxes ask for come first, tagged [W]
+  if(wish.want.length){ const pool=Object.keys(RX.INFO).filter(n=>(RX.INFO[n].bits&bit)||(s==='nightDrink'&&RX.INFO[n].cuisine==='Drink')).concat(ownList());
+    const rw=mulberry32((NL.runSeed^(d*131+s.length*17))>>>0); const hits=pool.filter(n=>wish.want.some(tk=>hasAll(n,tk))).sort(()=>rw()-0.5); hits.slice(0,25).forEach(n=>add(n,'W')); }
   Object.keys(st.favDishes||{}).forEach(n=>{ const I=RX.INFO[n]; const c=(st.custom||{})[n]; if((I&&(I.bits&bit))||(c&&(!c.slots||!c.slots.length||c.slots.includes(s)))) add(n,'F'); });
   ownList().forEach(n=>{ const c=st.custom[n]; if(!c.slots||!c.slots.length||c.slots.includes(s)) add(n,'Y'); });
   const roles=[...new Set(PATTERNS[s].flat().map(r=>r[0]))]; roles.forEach(r=>POOL.roles[r].forEach(n=>add(n,'P')));
   if(novelty!=='fav'||guest){ const rest=Object.keys(RX.INFO).filter(n=>(RX.INFO[n].bits&bit)||(s==='nightDrink'&&RX.INFO[n].cuisine==='Drink'));
-    const co={L:0,P:1,R:2,V:3,H:4}; rest.sort((a,b)=>(guest?0:co[RX.INFO[a].cat]-co[RX.INFO[b].cat])||a.localeCompare(b));
-    const r=mulberry32(NL.hash(d+s+st.idx).length*7919+d)(); for(const n of rest.slice(Math.floor(r*Math.max(1,rest.length-140))).slice(0,140)) add(n,'L'); }
-  return out; }
+    // a different random sample for every meal and every Regenerate, low-FODMAP-safe first when someone needs it
+    const rnd=mulberry32((NL.runSeed^(d*7919+NL.SLOTBIT[s]*104729))>>>0); const key=new Map(rest.map(n=>[n,rnd()]));
+    const co={L:0,P:1,R:2,V:3,H:4}; rest.sort((a,b)=>(fod?co[RX.INFO[a].cat]-co[RX.INFO[b].cat]:0)||key.get(a)-key.get(b));
+    for(const n of rest.slice(0,120)) add(n,'L'); }
+  // shuffle within each group so the list order doesn't push the same dishes to the top every day
+  const rnd2=mulberry32((NL.runSeed^(d*31+NL.SLOTBIT[s]))>>>0); const order=novelty==='fav'?{W:0,F:1,Y:2,P:3,L:4}:{W:0,F:1,Y:1,P:1,L:1}; // [W] first; otherwise favourites are mixed in (tagged [F]) so the same ones aren't always on top
+  const res=new Map([...out].map(e=>[e,rnd2()]).sort((a,b)=>order[a[0][1]]-order[b[0][1]]||a[1]-b[1]).map(x=>x[0])); res.notFor=notFor; return res; }
 function familySummary(){ return NL.members().map((m,i)=>`M${i+1}: goals ${GOALS.filter(([k])=>m.goals[k]).map(x=>x[1]).join(', ')||'none'}; conditions: ${m.conditions||'none'}; diet: ${m.restr.diet}; allergies: ${m.restr.allergens.join(', ')||'none'}`).join('\n')||'No profiles'; }
 function fallbackFill(w,targets){ // no AI: random valid combination from the meal patterns that passes the family limits
   let n=0; for(const [d,s] of targets){ const guest=NL.guestFor(w,d,s); const diet=NL.dietFor(w,d); const cand=slotCandidates(w,d,s,guest,diet,'fav');
@@ -2483,7 +2547,7 @@ Reply with JSON only: {"r":[{"id":"week","all":false,"meals":["0|breakfast"],"un
   return {keys:keys.filter(k=>out.has(k)),all:false}; }
 NL.fill=async function(scope,statusEl){
   const say=(t,err)=>{ if(statusEl){ statusEl.textContent=t; statusEl.classList.toggle('err',!!err); } NL.status(t,err); };
-  const w=st.weeks[st.idx], m=meta(w);
+  const w=st.weeks[st.idx], m=meta(w); if(!scope.keepSeed) NL.runSeed=(Math.random()*2**31)>>>0; // a fresh mix of candidates every time
   let targets=[]; if(scope.meals) targets=scope.meals.map(([d,s])=>[+d,s]).filter(([d,s])=>scope.replace||!w.days[d][s].length);
   else for(const d of scope.days) for(const [s] of SLOTS) if(!w.days[d][s].length) targets.push([d,s]);
   if(!targets.length){ say('Nothing to fill: those meals already have dishes. Use a meal\'s ⚙ → “Suggest again” to replace one, or clear them first.'); return; }
@@ -2511,21 +2575,26 @@ Rules:
 - Family meals: prefer dishes that suit every member's goals; never choose a dish that breaks a member's allergy or diet. Guest meals: choose the tastiest crowd-pleasing dishes; family health goals don't restrict them.
 - Respect the food setting of each day (veg/egg/non-veg), time to cook, and "familiar vs new": ${({fav:'mostly favourites (tag F) and familiar dishes',mix:'mostly favourites and familiar dishes, about one less-familiar dish a day',new:'try dishes the family hasn\'t had'})[novelty]}.
 - If the user cooks only on some days, fill the other days with leftovers of dishes cooked earlier (same names) or no-cook items. If a batch item (like idli batter) has a number of uses, use it in up to that many meals, within 4 days of making it.
-- Vary dishes across the week; avoid repeating a main dish on consecutive days unless it's a planned leftover.
+- The suggest boxes are the user's requirements: follow every one of them (dishes to avoid, dishes or ingredients they want more of, times). Dishes tagged [W] match what a box asks for: use them where they fit. [F] = family favourite.
+- A dish tagged [not for Mx] doesn't suit that member (their diet, or their health check). You may still choose it, but then ALSO choose one alternative for that member in "alt" — a dish from the same meal's candidates that suits them and does the same job (e.g. a veg gravy instead of a chicken gravy). Choose the main dish and the alternative so both can be cooked side by side within the meal's time (its time limit if one is given, otherwise a normal time for that meal).
+- If a box asks to use the groceries at home, prefer dishes made mostly from "Groceries already at home"; buying a few extra items is fine unless the box says otherwise. If a box asks for balanced nutrition, give each day enough protein (dal, legumes, eggs, dairy, meat or fish as the diet allows), vegetables and some fruit, and whole grains or millets where they fit.
+- Variety: every day should look different. Rotate the breakfast base (e.g. idli, dosa, upma, pongal, millet dishes, roti/paratha, poha), the rice or grain at lunch, the dal or gravy, and the vegetables. Don't repeat a main dish within 3 days, and use each dish at most twice a week, unless it's a planned leftover or batch item. Look at "Week so far" before choosing.
+- Health: pick what suits the members' goals and conditions listed under Family — for example fewer fried, sweet or rich dishes when someone has diabetes, high cholesterol or a weight goal, and only low-FODMAP-safe choices for a low-FODMAP member in family meals.
 Also report, for each suggest box, the key points you understood (2–5 words each) and any meals the boxes say are for guests.
 Family:
 ${familySummary()}
 Week box: ${wk.suggest||'(empty)'}
 ${m.days.map((x,di)=>x.suggest?`Day box (${DAYS[di]}): ${x.suggest}`:'').filter(Boolean).join('\n')}
 ${Object.entries(m.meals).filter(([,x])=>x.suggest).map(([k,x])=>{ const [d,s]=k.split('|'); return `Meal box (${DAYS[+d]} ${slotLabel(s)}): ${x.suggest}`; }).join('\n')}
+Groceries already at home (ticked in Groceries): ${Object.entries((st.pantry&&st.pantry.have)||{}).filter(([,v])=>v&&v.t).map(([k])=>k).slice(0,80).join(', ')||'(none ticked)'}
 Week so far:
 ${already}
 Meals to fill:
 ${tg.map(([d,s])=>{ const k=d+'|'+s; const c=cands[k]; return `${k} = ${DAYS[d]} ${slotLabel(s)} | people ${NL.peopleFor(w,d,s)} | ${NL.guestFor(w,d,s)?'GUEST MEAL'+(NL.guestNoteFor(w,d,s)?' ('+NL.guestNoteFor(w,d,s)+')':''):'family meal'} | food: ${NL.dietFor(w,d)} | time: ${TIMETXT[NL.timeFor(w,d,s)]||'any'}
-  candidates: ${[...c].map(([n,t])=>t==='F'?n+' [F]':n).join('; ')}`; }).join('\n')}
+  candidates: ${[...c].map(([n,t])=>{ const tg=[t==='F'||t==='W'?t:'',...((c.notFor||{})[n]||[]).map(x=>'not for '+x)].filter(Boolean); return tg.length?`${n} [${tg.join(', ')}]`:n; }).join('; ')}`; }).join('\n')}
 Reply with JSON only:
-{"meals":[{"k":"<day|slot key>","dishes":["..."],"new":[],"why":"at most 12 words"}],"understood":{"week":["..."],"days":{"<day number>":["..."]},"meals":{"<day|slot>":["..."]}},"guests":["<day|slot>"]}`;
-      const out=await NL.ai(prompt,{maxTokens:8192,temperature:0.5});
+{"meals":[{"k":"<day|slot key>","dishes":["..."],"alt":[{"dish":"...","for":["M2"]}],"new":[],"why":"at most 12 words"}],"understood":{"week":["..."],"days":{"<day number>":["..."]},"meals":{"<day|slot>":["..."]}},"guests":["<day|slot>"]}`;
+      const out=await NL.ai(prompt,{maxTokens:8192,temperature:scope.all?0.9:0.6});
       if(out&&out.understood&&!understoodSet){ understoodSet=true; const u=out.understood;
         if(Array.isArray(u.week)) wk.understood=u.week.slice(0,6).map(x=>String(x).slice(0,40));
         if(u.days) for(const [k,v] of Object.entries(u.days)) if(m.days[+k]&&Array.isArray(v)) m.days[+k].understood=v.slice(0,6).map(x=>String(x).slice(0,40));
@@ -2537,7 +2606,18 @@ Reply with JSON only:
         nw.forEach(n=>{ if(!st.custom[n]) st.custom[n]={link:'',note:'New idea from Suggest',slots:[s],idea:true}; });
         ds=[...new Set(ds.concat(nw))].slice(0,5);
         if(!NL.guestFor(w,+d,s)&&famHasFodmap()){ let lim=0; ds=ds.filter(n=>{ const cat=catOf(n); if(cat==='P'||cat==='R'){ lim++; return lim<=1; } return true; }); }
-        if(!ds.length) continue; w.days[+d][s]=ds; fixCell(w,+d,s); placed.push(k); }
+        if(!ds.length) continue;
+        // members who can't have a chosen dish get an alternative cooked alongside
+        const nf=c.notFor||{}; const need=new Set(ds.flatMap(n=>nf[n]||[])); const altFor={};
+        for(const a of (Array.isArray(x.alt)?x.alt:[])){ const dn=String((a&&a.dish)||''); const fr=(Array.isArray(a&&a.for)?a.for:[]).map(String).filter(mm=>need.has(mm));
+          if(!c.has(dn)||!fr.length||fr.some(mm=>(nf[dn]||[]).includes(mm))) continue; altFor[dn]=(altFor[dn]||[]).concat(fr); fr.forEach(mm=>need.delete(mm)); }
+        for(const mm of [...need]){ const blocked=ds.filter(n=>(nf[n]||[]).includes(mm)); const roles=Object.keys(POOL.roles).filter(r=>blocked.some(b=>POOL.roles[r].includes(b)));
+          const ok=n=>!ds.includes(n)&&!(nf[n]||[]).includes(mm)&&(!NL.timeLimit||typeof fitsTime!=='function'||!st.ttime[n]||fitsTime(n,NL.timeLimit.max));
+          const pick=[...c.keys()].find(n=>ok(n)&&roles.some(r=>POOL.roles[r].includes(n)))||[...c.keys()].find(n=>ok(n)&&blocked.some(b=>catOf(b)===catOf(n)))||[...c.keys()].find(ok);
+          if(pick){ altFor[pick]=(altFor[pick]||[]).concat(mm); need.delete(mm); } }
+        const alts=Object.keys(altFor).filter(n=>!ds.includes(n)); ds=ds.concat(alts);
+        const ms=NL.members(); w.alt=w.alt||{}; if(Object.keys(altFor).length) w.alt[k]=Object.fromEntries(Object.entries(altFor).map(([n,ids])=>[n,[...new Set(ids)].map(id=>(ms[+id.slice(1)-1]||{}).id).filter(v=>v!=null)])); else delete w.alt[k];
+        w.days[+d][s]=ds; fixCell(w,+d,s); placed.push(k); }
       save(); render(); }
     say(placed.length?`Filled ${placed.length} meal${placed.length>1?'s':''}. Use ⇄ to replace any dish, or Undo.`:'Gemini didn\'t return usable dishes. Try rewording the suggest box.',!placed.length);
     if(placed.length){ NL.closeDlg(); showToast(`Filled ${placed.length} meal${placed.length>1?'s':''} from your suggestions. Undo is here if you don't like them.`); }
@@ -2547,6 +2627,12 @@ Reply with JSON only:
 NL.after(()=>{ const w=st.weeks[st.idx]; document.querySelectorAll('li[data-c]').forEach(li=>{ const [d,s,i]=li.dataset.c.split('|'); const n=(w.days[+d][s]||[])[+i]; const c=n&&(st.custom||{})[n];
   if(c&&c.idea){ li.classList.add('idea'); const dn=li.querySelector('.dn'); dn.insertAdjacentHTML('beforeend',`<button type="button" class="ideatag" data-keep-idea="${esc(n)}" title="Keep this as one of your dishes">New idea · keep</button>`); } }); });
 document.addEventListener('click',e=>{ const b=e.target.closest('[data-keep-idea]'); if(!b) return; e.preventDefault(); const n=b.dataset.keepIdea; if(st.custom[n]){ delete st.custom[n].idea; st.custom[n].note=st.custom[n].note==='New idea from Suggest'?'':st.custom[n].note; Store.putDish(n,st.custom[n]).catch(()=>{}); save(); render(); showToast(`Kept “${n}” as your dish.`); $('toast-undo').hidden=true; } });
+
+/* "for Ravi" on an alternative dish chosen for members who can't have the main one */
+NL.after(()=>{ const w=st.weeks[st.idx]; if(!w||!w.alt) return; const ms=NL.members();
+  document.querySelectorAll('li[data-c]').forEach(li=>{ const [d,s,i]=li.dataset.c.split('|'); const k=d+'|'+s; const n=(w.days[+d][s]||[])[+i]; const ids=n&&w.alt[k]&&w.alt[k][n]; if(!ids||!ids.length) return;
+    const names=ids.map(id=>(ms.find(m=>m.id===id)||{}).name).filter(Boolean); if(!names.length||li.querySelector('.alttag')) return;
+    const dn=li.querySelector('.dn')||li; dn.insertAdjacentHTML('beforeend',`<span class="alttag" title="Made alongside for ${esc(names.join(', '))}, who can't have the main dish">for ${esc(names.join(', '))}</span>`); }); });
 
 /* ---------- Cooking time: filter Meal combinations, and keep Suggest within the time ----------
    The master list has no cooking times, so Gemini estimates them once per dish (cached in st.ttime).
@@ -2566,17 +2652,19 @@ function slotDishes(slot){ const w=st.weeks[st.idx]; const set=new Set();
   for(const n in RX.INFO) if(slotHasBit(n,slot)&&!NL.isHidden(n)&&dietOkWeek(n,w)) set.add(n);
   return [...set]; }
 let ttRun=null;
-async function ensureTimes(names,say,signal){
+let ttLock=Promise.resolve();
+function ensureTimes(names,say,signal){ const run=ttLock.then(()=>ensureTimesNow(names,say,signal)); ttLock=run.catch(()=>{}); return run; } // queue: never two at once
+async function ensureTimesNow(names,say,signal){
   const miss=[...new Set(names)].filter(n=>!tOf(n)); if(!miss.length) return 0; if(!NL.aiOn()) throw {code:'not_configured'};
-  for(let i=0;i<miss.length;i+=100){ if(signal&&signal.aborted) throw {code:'cancelled'}; const chunk=miss.slice(i,i+100);
-    say&&say(`Checking cooking times… ${Math.min(i+100,miss.length)} of ${miss.length} dishes`);
+  for(let i=0;i<miss.length;i+=80){ if(signal&&signal.aborted) throw {code:'cancelled'}; const chunk=miss.slice(i,i+80);
+    say&&say(`Checking cooking times… ${Math.min(i+80,miss.length)} of ${miss.length} dishes`);
     const out=await NL.ai(`Estimate how long each home-cooked dish takes to make for a family of 3–4 (Indian home cooking unless the name says otherwise).
 "m": minutes of hands-on plus cooking time, starting from ingredients normally kept at home.
 "pre": true if it ALSO needs something prepared well ahead — fermented batter, overnight soaking, long marinating, dough resting over 30 minutes; otherwise false. When pre is true, "m" is the time once that is ready.
 Drinks and fruit: the time to make, cut or pour. Be realistic for an ordinary home kitchen.
 Reply with JSON only: {"t":[{"n":<dish number>,"m":<minutes>,"pre":false}]}
 Dishes (number | name | serving note | recipe note):
-${chunk.map((n,k)=>{ const I=RX.INFO[n]||{}; const c=(st.custom||{})[n]||{}; return `${k+1} | ${n} | ${(I.portion||'').slice(0,70)} | ${(I.note||c.note||'').slice(0,70)}`; }).join('\n')}`,{maxTokens:8192,signal,temperature:0.2});
+${chunk.map((n,k)=>{ const I=RX.INFO[n]||{}; const c=(st.custom||{})[n]||{}; return `${k+1} | ${n} | ${(I.portion||'').slice(0,70)} | ${(I.note||c.note||'').slice(0,70)}`; }).join('\n')}`,{maxTokens:6144,signal,temperature:0.2});
     for(const x of (out&&out.t)||[]){ const n=chunk[(+x.n)-1]; const m=Math.round(+x.m); if(!n||!(m>0)) continue; st.ttime[n]={m:Math.min(m,600),pre:!!x.pre,v:TT_V}; }
     save(); }
   return miss.length; }
@@ -2606,7 +2694,7 @@ NL.timeEnsure=async()=>{ if(!LIB.time) return; const slot=LIB.slot; const need=s
   if(!LIB.time) return; const c=$('lib-count'); if(!c) return;
   if(LIB.tstate==='busy') c.textContent=LIB.tmsg||'Checking cooking times…';
   else if(LIB.tstate==='err') c.textContent=`Couldn't check cooking times (${LIB.terr}) — showing all. `;
-  else if(slotDishes(LIB.slot).some(n=>!tOf(n))) { c.textContent='Checking cooking times…'; NL.timeEnsure(); }
+  else if(slotDishes(LIB.slot).some(n=>!tOf(n))) { c.textContent='Checking cooking times…'; if(!NL.filling) NL.timeEnsure(); } // one thing at a time: Suggest first, then the list
   else { c.textContent=`⏱ Within ${LIB.time} min (Gemini estimates) · `+c.textContent+(LIB.extraN?` · more dishes from the master list at the end`:'');
     if(!LIB.list.length){ $('lib-rows').innerHTML=`<li class="lempty">No ${slotLabel(LIB.slot).toLowerCase()} dishes${LIB.q?` with “${esc(LIB.q)}”`:''} within ${LIB.time} minutes. Try a longer time.</li>`; } } }; }
 /* time picker next to "Find combos with…" */
@@ -2635,15 +2723,47 @@ function readAsk(scope){ const w=st.weeks[st.idx], m=meta(w); let texts, slot=nu
 NL.readAsk=readAsk;
 NL.timeLimit=null;
 { const _sc=slotCandidates; slotCandidates=function(w,d,s,...a){ const m=_sc(w,d,s,...a); const L=NL.timeLimit;
-  if(L&&(!L.slot||L.slot===s)) for(const n of [...m.keys()]) if(tOf(n)&&!fitsTime(n,L.max)) m.delete(n);
+  if(L&&(!L.slot||L.slot===s)){ const fit=[...m.keys()].filter(n=>fitsTime(n,L.max));
+    for(const n of [...m.keys()]) if(fit.length>=4?!fit.includes(n):(tOf(n)&&!fitsTime(n,L.max))) m.delete(n); } // only dishes known to fit, unless too few have times
   return m; }; }
 { const _f=NL.fill; NL.fill=async function(scope,statusEl){ const ask=readAsk(scope);
-  if(ask.slot||ask.max){ if(ask.slot) LIB.slot=ask.slot; if(ask.max) LIB.time=ask.max; LIB.open=true; LIB.shown=24; LIB.q=''; const q=$('lib-q'); if(q) q.value=''; saveLib(); renderLib(); }
-  if(ask.max&&NL.aiOn()){ const say=t=>{ if(statusEl) statusEl.textContent=t; };
-    try{ await ensureTimes(slotDishes(ask.slot||LIB.slot),say); }catch(e){ /* times are a nice-to-have for Suggest */ } renderLib(); }
-  NL.timeLimit=ask.max?{slot:ask.slot,max:ask.max}:null;
-  try{ return await _f.call(this,scope,statusEl); }
-  finally{ NL.timeLimit=null; if(ask.slot||ask.max){ renderLib(); const lib=$('lib'); if(lib) setTimeout(()=>lib.scrollIntoView({block:'nearest',behavior:'smooth'}),150); } } }; }
+  const say=t=>{ if(statusEl){ statusEl.textContent=t; statusEl.classList.remove('err'); } NL.status(t); };
+  NL.filling=true; NL.aiNote=say; NL.runSeed=(Math.random()*2**31)>>>0; scope={...scope,keepSeed:true};
+  try{
+    if(ask.slot||ask.max){ if(ask.slot) LIB.slot=ask.slot; if(ask.max) LIB.time=ask.max; LIB.open=true; LIB.shown=24; LIB.q=''; const q=$('lib-q'); if(q) q.value=''; saveLib(); renderLib(); }
+    if(ask.max&&NL.aiOn()){ // time only the dishes this Suggest will choose from (not the whole list): a few seconds, not a minute
+      const w=st.weeks[st.idx]; const days=scope.meals?scope.meals.map(x=>+x[0]):scope.days; const slots=ask.slot?[ask.slot]:scope.meals?[...new Set(scope.meals.map(x=>x[1]))]:[];
+      const names=new Set(); NL.timeLimit=null;
+      for(const d of days) for(const s of slots) for(const n of slotCandidates(w,d,s,NL.guestFor(w,d,s),NL.dietFor(w,d),meta(w).week.novelty||'mix').keys()) names.add(n);
+      if(names.size){ try{ await ensureTimes([...names],say); }catch(e){ if(e&&e.code==='cancelled') throw e; say(`Couldn't check cooking times (${NL.aiErr(e)}). The time limit goes to Gemini as a request instead.`); } } }
+    NL.timeLimit=ask.max?{slot:ask.slot,max:ask.max}:null;
+    return await _f.call(this,scope,statusEl);
+  } finally{ NL.timeLimit=null; NL.filling=false; NL.aiNote=null;
+    if(ask.slot||ask.max){ renderLib(); if(LIB.time) NL.timeEnsure(); const lib=$('lib'); if(lib) setTimeout(()=>lib.scrollIntoView({block:'nearest',behavior:'smooth'}),150); } } }; }
+
+/* ---------- Suggest / Regenerate work in the background ----------
+   The box closes as soon as you press the button. The meals being planned show "Planning…" in the week
+   and fill in as Gemini answers (two days at a time). Progress, waits and errors show in the status line
+   above the week, with a Stop button. */
+{ const b2=$('b2status');
+  b2.innerHTML='<span class="b2spin" aria-hidden="true"></span><span class="b2txt"></span><button type="button" class="linkbtn" id="b2stop">Stop</button>';
+  NL.status=(t,err)=>{ b2.querySelector('.b2txt').textContent=t||''; b2.classList.toggle('err',!!err); b2.classList.toggle('show',!!t||b2.classList.contains('busy')); };
+  $('b2stop').onclick=()=>{ if(NL.fillCtl) NL.fillCtl.abort(); NL.status('Stopping…'); }; }
+const fillBusy=on=>{ const b2=$('b2status'); b2.classList.toggle('busy',on); if(on) b2.classList.add('show'); document.body.classList.toggle('mp-planning',on); };
+NL.pending=null; NL.fillCtl=null;
+{ const _f=NL.fill; NL.fill=async function(scope,statusEl){
+  if(NL.pending){ NL.status('Already planning. Wait for it to finish, or press Stop.'); return; }
+  const w=st.weeks[st.idx]; const keys=new Set();
+  if(scope.meals) scope.meals.forEach(([d,s])=>keys.add(d+'|'+s));
+  else for(const d of scope.days) for(const [s] of SLOTS) if(scope.all||!w.days[d][s].length) keys.add(d+'|'+s);
+  NL.pending={keys,replace:!!scope.replace,w:st.idx}; NL.fillCtl=new AbortController();
+  NL.closeDlg(); fillBusy(true); NL.status(scope.all?'Planning your week…':'Planning…'); render();
+  try{ return await _f.call(this,scope,null); }
+  finally{ NL.pending=null; NL.fillCtl=null; fillBusy(false); render(); const t=$('b2status').querySelector('.b2txt').textContent; NL.status(t,$('b2status').classList.contains('err')); } }; }
+/* "Planning…" on the meals still waiting for Gemini */
+NL.after(()=>{ const P=NL.pending; if(!P||P.w!==st.idx) return; const w=st.weeks[st.idx];
+  for(const k of P.keys){ const [d,s]=k.split('|'); if(w.days[+d][s].length&&!P.replace) continue; const td=document.querySelector(`td[data-cell="${k}"]`)||document.querySelector(`[data-cell="${k}"]`);
+    if(td&&!td.querySelector('.plan-note')){ td.classList.add('planning'); td.insertAdjacentHTML('beforeend','<span class="plan-note" aria-hidden="true">Planning…</span>'); } } });
 
 /* ---------- Steps 6–7: ingredient estimates and the Groceries tab ----------
    Ingredients are RAW, as bought (rice and urad dal, never "cooked rice" or "idli batter"), estimated once
@@ -2735,19 +2855,28 @@ function groDialog(msg){
 /* Voice: keeps listening through pauses until you say a done phrase ("that's all", "done", "finished",
    "stop listening") or tap the mic again, then ticks everything you said. Gives up after 2 minutes. */
 const DONE_RX=/\b(that'?s all|that is all|that'?s it|that is it|i'?m done|i am done|all done|done|finished|stop listening)\b[\s.!]*$/i;
-function startVoice(SR,list){ const V={on:true,text:'',live:'',r:null,t0:Date.now()}; NL.groVoice=V;
+const DONE_ANY=/\b(?:that'?s all|that is all|that'?s it|that is it|i'?m done|i am done|all done|done|finished|stop listening)\b/i;
+function startVoice(SR,list){ const V={on:true,text:'',live:'',r:null,t0:Date.now(),ticked:[],unmatched:[]}; NL.groVoice=V;
   const inp=$('gro-say'), mic=$('gro-mic'), S=t=>{ const e=$('gro-status'); if(e) e.textContent=t; };
   const ui=()=>{ if(mic){ mic.textContent=V.on?'■':'🎤'; mic.classList.toggle('listening',V.on); mic.setAttribute('aria-label',V.on?'Stop listening':'Speak'); } };
   const said=()=>(V.text+' '+V.live).replace(/\s+/g,' ').trim();
+  /* tick each item as soon as the browser has a final phrase for it */
+  const tickNow=seg=>{ seg=String(seg).split(DONE_ANY)[0]; if(!seg.trim()) return; const r=parseLocal(seg,list);
+    for(const x of r.out){ st.pantry.have[x.key]={t:x.have}; if(x.have&&!V.ticked.includes(x.key)) V.ticked.push(x.key);
+      const cb=document.querySelector(`[data-have="${CSS.escape(x.key)}"]`); if(cb){ cb.checked=x.have; const li=cb.closest('li'); if(li){ li.classList.toggle('have',x.have); li.classList.toggle('needbuy',!x.have); li.classList.remove('just'); void li.offsetWidth; li.classList.add('just'); } } }
+    V.unmatched.push(...r.unmatched.filter(u=>!/^(and|then|also|um+|uh+|ok|okay)$/.test(u.trim()))); save();
+    if(V.on) S(`Ticked ${V.ticked.length}: ${V.ticked.slice(-4).join(', ')}${V.ticked.length>4?'…':''}. Keep going, or say “that's all”.`); };
   V.finish=()=>{ if(!V.on) return; V.on=false; try{ V.r&&V.r.stop(); }catch(e){} ui();
-    const t=said().replace(DONE_RX,'').replace(/[\s,.]+$/,'').trim(); NL.groVoice=null;
+    if(V.live) tickNow(V.live); V.live=''; NL.groVoice=null;
+    const t=said().split(DONE_ANY)[0].replace(/[\s,.]+$/,'').trim(); if(inp) inp.value=t;
     if(!t){ S('Didn\'t catch any items. Tap the mic and try again, or type them.'); return; }
-    if(inp) inp.value=t; applySay(t,list); };
+    if(V.unmatched.length&&NL.aiOn()) applySay(V.unmatched.join(', '),list); // Gemini matches the words the list didn't recognise
+    else groDialog(`Ticked ${V.ticked.length} item${V.ticked.length===1?'':'s'}${V.ticked.length?': '+V.ticked.join(', '):''}.${V.unmatched.length?` Not in this plan: ${V.unmatched.join(', ')}.`:''}`); };
   const listen=()=>{ const r=new SR(); V.r=r; r.lang=navigator.language||'en-IN'; r.continuous=true; r.interimResults=true;
-    r.onresult=e=>{ let live=''; for(let i=e.resultIndex;i<e.results.length;i++){ const x=e.results[i]; if(x.isFinal) V.text+=' '+x[0].transcript; else live+=x[0].transcript; }
+    r.onresult=e=>{ let live=''; for(let i=e.resultIndex;i<e.results.length;i++){ const x=e.results[i]; if(x.isFinal){ V.text+=' '+x[0].transcript; tickNow(x[0].transcript); } else live+=x[0].transcript; }
       V.live=live; if(inp) inp.value=said(); if(DONE_RX.test(said())) V.finish(); };
     r.onerror=e=>{ if(e.error==='not-allowed'||e.error==='service-not-allowed'){ V.on=false; NL.groVoice=null; ui(); S('Microphone permission is off. Allow it in the browser, or type instead.'); } };
-    r.onend=()=>{ if(!V.on) return; V.text+=' '+V.live; V.live=''; // the browser stops after a pause: keep listening until the done phrase
+    r.onend=()=>{ if(!V.on) return; if(V.live){ V.text+=' '+V.live; tickNow(V.live); } V.live=''; // the browser stops after a pause: keep listening until the done phrase
       if(Date.now()-V.t0>120000) return V.finish(); try{ listen(); }catch(e){ V.finish(); } };
     r.start(); };
   try{ if(inp) inp.value=''; S('Listening… list what you have, then say “that\'s all”.'); ui(); listen(); }
