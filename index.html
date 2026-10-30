@@ -4637,6 +4637,7 @@ function renderPanel(totals, personalRda, mealCards, verdict, health_impact, gap
     .filter(k => actualPct[k] < 70 && !['calories','carbs_g','sugars_g','sodium_mg','cholesterol_mg'].includes(k))
     .map(k => ({ key: k, label: GRDA[k]?.label || k, pct: actualPct[k] }))
     .sort((a, b) => a.pct - b.pct);
+  S.lastNutritionGaps = realGaps; // read by the Meal Planner bridge when it jumps back with "fix nutrition gaps"
   // If Gemini provided no top_gap but we have real deficiencies, synthesise one
   if (!top_gap && realGaps.length > 0) {
     const worst = realGaps[0];
@@ -7933,5 +7934,48 @@ initWelcome();
 </body>
 </html>
 
+<script>
+/* ---------- Meal Planner bridge: nutrition check for one planned day, one family member.
+   The planner sends what that person is actually eating that day; this runs the exact same Nutrition
+   Analysis flow as if it had been logged (reusing the existing nutrient/Gemini pipeline as-is — nothing
+   new added there), then offers a way back to the planner carrying whatever came out low. */
+window.addEventListener('message', async (e) => {
+  const msg = e && e.data;
+  if (!msg || msg.type !== 'mp-nutrition-check') return;
+  let profiles = [];
+  try { profiles = JSON.parse(localStorage.getItem('nl_profiles')) || []; } catch (_) {}
+  const prof = profiles.find(p => p.id === (msg.member && msg.member.id)) || { id: msg.member && msg.member.id, name: (msg.member && msg.member.name) || '' };
+  const prevProfile = S.profile;
+  S.profile = prof;
+  SLOTS.forEach(sl => { const inp = document.getElementById('inp-' + sl.id); if (inp) inp.value = (msg.slots && msg.slots[sl.id]) || ''; });
+  const ft = document.getElementById('inp-freetext'); if (ft) ft.value = '';
+  S.plannerCheck = { memberId: prof.id, memberName: prof.name || '', dayIdx: msg.dayIdx, dayLabel: msg.dayLabel || '' };
+  try { await seeNutrition(); } catch (err) { console.error('[Meal Planner] nutrition check failed', err); }
+  S.profile = prevProfile; // restore the real active profile; the panel below still shows the checked member's result
+  const hdrEl = document.getElementById('hdr-profile'); if (hdrEl) hdrEl.textContent = S.profile?.name || '';
+  const mwnEl = document.getElementById('mobile-welcome-name');
+  if (mwnEl) mwnEl.textContent = S.profile?.name ? 'Welcome, ' + S.profile.name + ' 👋' : 'Welcome 👋';
+  const panel = document.getElementById('nutr-panel');
+  const check = S.plannerCheck;
+  if (panel && check) {
+    const old = document.getElementById('mp-plan-banner'); if (old) old.remove();
+    const banner = document.createElement('div');
+    banner.id = 'mp-plan-banner';
+    banner.style.cssText = 'margin:12px 14px;padding:10px 12px;border-radius:10px;background:var(--md-primary-cont,#2a3b55);color:var(--md-on-prim-cont,#fff);font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap';
+    const label = document.createElement('span');
+    label.textContent = 'Showing the planned day for ' + (check.memberName || 'this person') + ' — ' + (check.dayLabel || '');
+    const back = document.createElement('button');
+    back.type = 'button'; back.className = 'btn btn-ghost btn-sm'; back.id = 'mp-back-btn'; back.style.flex = '0 0 auto';
+    back.textContent = '← Back to planner';
+    back.onclick = () => {
+      const iframe = document.querySelector('#mp-view iframe');
+      if (iframe) iframe.contentWindow.postMessage({ type: 'mp-nutrition-redo', memberId: check.memberId, dayIdx: check.dayIdx, lowNutrients: S.lastNutritionGaps || [] }, '*');
+      navTo('planner');
+    };
+    banner.appendChild(label); banner.appendChild(back);
+    panel.prepend(banner);
+  }
+});
+</script>
 <script src="meal-planner/nl-embed.js"></script>
 </body></html>

@@ -261,8 +261,9 @@ li.fav .dn::before{content:"★ ";color:var(--fav);font-size:11px}
 .cl+.mtag,dd .mtag{display:block}
 .mtag-n{font:inherit;color:inherit;font-weight:inherit;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px}
 .mtag-in{font-size:11.5px;font-weight:600;color:var(--turm);width:38px;border:1px solid var(--turm);border-radius:4px;padding:0 2px;background:var(--bg)}
-/* suitability badges */
+/* suitability badges — hidden entirely when "Hide check badges" is on (body[data-hidechips]) */
 td li{flex-wrap:wrap}
+body[data-hidechips] .sbadges,body[data-hidechips] #suit-legend{display:none}
 .sbadges{display:flex;flex-wrap:wrap;gap:3px;flex-basis:100%;order:3;margin:1px 0 3px}
 .cl .sbadges{flex-basis:auto;order:0}
 .sb{display:inline-flex;align-items:center;gap:1px;border:0;border-radius:6px;padding:1px 5px;font:700 11px var(--body);line-height:1.5;cursor:pointer}
@@ -1934,6 +1935,7 @@ NL.isFav=d=>!!(st.favDishes&&st.favDishes[d]);
   const b2=document.createElement('div'); b2.className='bar2'; b2.id='bar2';
   b2.innerHTML=`<button type="button" class="bbtn" id="checkbtn">Check for family</button>
     <label class="viewas"><span class="vh">View as</span><select id="viewas" aria-label="View as"><option value="">View as: Everyone</option></select></label>
+    <button type="button" class="bbtn" id="hidechipsbtn" aria-pressed="false">Hide check badges</button>
     <button type="button" class="bbtn" id="markfavbtn" aria-pressed="false">Mark favourite dishes</button>
     <button type="button" class="bbtn" id="grobtn">Groceries</button>
     <button type="button" class="bbtn" id="favbtn">Favourites</button>
@@ -2795,6 +2797,13 @@ function renderViewAs(){ const sel=$('viewas'); const v=sel.value; const ms=NL.m
 $('viewas').onchange=()=>{ try{ sessionStorage.setItem('mp-viewas',$('viewas').value); }catch(e){} render(); };
 { const b2=$('bar2'); b2.insertAdjacentHTML('afterend','<p class="vabanner" id="vabanner" role="status" hidden></p>'); }
 renderViewAs(); try{ const v=sessionStorage.getItem('mp-viewas'); if(v){ $('viewas').value=v; } }catch(e){}
+/* "Hide check badges" toolbar toggle: purely a visibility switch (CSS) for the per-member ✓/•/✕/⚠/? chips
+   that "Check for family" puts on every dish — on by default (unchanged), off hides the clutter. */
+function renderHideChips(){ const b=$('hidechipsbtn'); if(!b) return; const on=document.body.hasAttribute('data-hidechips');
+  b.setAttribute('aria-pressed',String(on)); setBtnLabel(b,on?'Show check badges':'Hide check badges'); }
+{ const b=$('hidechipsbtn'); if(b){ try{ if(sessionStorage.getItem('mp-hidechips')==='1') document.body.setAttribute('data-hidechips',''); }catch(e){}
+  renderHideChips();
+  b.onclick=()=>{ const on=document.body.toggleAttribute('data-hidechips'); try{ sessionStorage.setItem('mp-hidechips',on?'1':'0'); }catch(e){} renderHideChips(); }; } }
 NL.after(()=>{
   const w=st.weeks[st.idx]; if(!w) return;
   const ms=NL.members(); const va=$('viewas').value; const one=ms.find(m=>m.id===va);
@@ -3572,6 +3581,130 @@ function ingDialog(){
     save(); groDialog(n?`Saved ingredients for ${n} dish${n===1?'':'es'}.`:'No changes.'); };
 }
 $('grobtn').onclick=()=>groDialog('');
+
+/* ---------- "Check for nutrition": feed one person's planned day into NutriLens's own Nutrition
+   Analysis tab, instead of building a second nutrition UI here. The planner sends what that person is
+   actually eating that day (postMessage to the host page); the host runs its existing analysis exactly
+   as it would for logged food, then can send back which nutrients came out low — which reopens that day
+   here with a "Fix nutrition gaps" option in the Suggest box. No proactive layer, no extra AI calls to
+   get here: resolution is pure local lookup over what's already planned. */
+
+/* What this member actually eats at one meal: base cell dishes, minus anything they'd skip — the same
+   verdict (allergy/diet, FODMAP category, or an AI-checked "not suitable") that fades a dish with the
+   red outline under View as — minus any dish that's an alt tagged for OTHER members only (w.alt — the
+   bookkeeping healthAlts() already keeps when it adds a substitute). A dish nobody's checked yet (verdict
+   null) is kept, same as View as treats it: no clutter, no assumption, until Check for family has run. */
+function effectiveDishes(w,d,s,m){
+  const k=d+'|'+s; const alt=(w.alt&&w.alt[k])||{};
+  return (w.days[d][s]||[]).filter(n=>{
+    const v=NL.verdict(m,n); if(v&&(v.s==='no'||v.s==='allergy')) return false;
+    const tags=alt[n]; if(tags&&tags.length&&!tags.includes(m.id)) return false;
+    return true; });
+}
+NL.effectiveDishes=effectiveDishes;
+
+/* Planner slot key → the host app's own slot id (NutriLens's Nutrition Analysis tab), so the host needs
+   no remapping at all — it just reads msg.slots[sl.id] with its own SLOTS list. */
+const HOST_SLOT={morningDrink:'morning_drink',breakfast:'breakfast',morningSnack:'packed_snack',lunchPacked:'packed_lunch',homeLunch:'home_lunch',eveningSnack:'evening_snack',dinner:'dinner',nightDrink:'night_drink'};
+function slotTextsForHost(w,d,m){ const o={}; for(const [s] of SLOTS){ const ds=effectiveDishes(w,d,s,m); if(ds.length) o[HOST_SLOT[s]]=ds.join(', '); } return o; }
+
+/* ---------- toolbar entry: pick a member, then one day ---------- */
+function openNutritionCheck(){
+  const ms=NL.members();
+  if(!ms.length){ NL.status('No NutriLens profiles found. Add family members as NutriLens profiles.',true); return; }
+  const w=st.weeks[st.idx];
+  const body=NL.dlg('Check for nutrition','See how a planned day stacks up for one person, in NutriLens’s own Nutrition Analysis',`
+   <div class="fld"><label class="lbl" for="nt-who">Who</label><select id="nt-who"><option value="">Choose…</option>${ms.map(m=>`<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</select></div>
+   <div class="fld" id="nt-daywrap" hidden><span class="lbl">Which day</span>
+     <div class="nt-days" style="display:flex;flex-wrap:wrap;gap:6px 14px">${DAYS.map((lbl,i)=>`<label class="chk"><input type="radio" name="nt-day" value="${i}"> ${lbl}</label>`).join('')}</div>
+   </div>
+   <div class="rp-row"><button type="button" class="btn" id="nt-go" disabled>Check nutrition</button></div>
+   <p class="rp-status" id="nt-status" role="status" aria-live="polite"></p>`);
+  const who=$('nt-who'), daywrap=$('nt-daywrap'), go=$('nt-go');
+  const upd=()=>{ const has=!!who.value; daywrap.hidden=!has; go.disabled=!has||!body.querySelector('input[name="nt-day"]:checked'); };
+  who.onchange=upd;
+  body.addEventListener('change',e=>{ if(e.target&&e.target.name==='nt-day') upd(); });
+  go.onclick=()=>{
+    const m=ms.find(x=>x.id===who.value); const checked=body.querySelector('input[name="nt-day"]:checked');
+    if(!m||!checked) return;
+    const d=+checked.value; const slots=slotTextsForHost(w,d,m);
+    if(!Object.keys(slots).length){ $('nt-status').textContent='Nothing is planned for '+DAYS[d]+' yet.'; $('nt-status').classList.add('err'); return; }
+    try{ window.parent.postMessage({type:'mp-nutrition-check',member:{id:m.id,name:m.name},dayIdx:d,dayLabel:DAYS[d],slots},'*'); }catch(e){}
+    NL.closeDlg();
+  };
+}
+{ const b2=$('bar2'); if(b2){ const btn=document.createElement('button'); btn.type='button'; btn.className='bbtn'; btn.id='nutrbtn'; btn.textContent='Check for nutrition';
+  const ref=$('markfavbtn'); (ref&&ref.parentNode===b2)?ref.after(btn):b2.appendChild(btn); btn.onclick=openNutritionCheck; } }
+
+/* ---------- hearing back from the host: reopen that day here, with whatever came out low ---------- */
+window.addEventListener('message',e=>{
+  const msg=e&&e.data; if(!msg||msg.type!=='mp-nutrition-redo') return;
+  const ms=NL.members(); const m=ms.find(x=>x.id===msg.memberId);
+  NL._nutritionFix={memberId:msg.memberId,dayIdx:msg.dayIdx,lowNutrients:Array.isArray(msg.lowNutrients)?msg.lowNutrients:[]};
+  if(m){ const va=$('viewas'); if(va){ va.value=m.id; try{ sessionStorage.setItem('mp-viewas',m.id); }catch(_){} } }
+  render();
+  if(typeof openDaySuggest==='function') openDaySuggest(msg.dayIdx);
+});
+
+/* ---------- "Fix nutrition gaps": one extra dish for the flagged member, aimed at what's low.
+   Applies silently and flashes green, same as healthAlts() does for a health-condition alternative —
+   no preview/confirm step. Stacks onto the meal like healthAlts already does (no cap/consolidation yet).
+   Checks the pick against BOTH the member's own diet/allergy limits AND the plan's own Food setting for
+   whichever slot it lands in (NL.dietFor — a family's "vegetarian this week" isn't necessarily anyone's
+   personal profile restriction, so hardBlock alone missed it). Pressing the button again — "not the right
+   dish" — takes back whatever it added last time here and tries once more, instead of stacking a second
+   guess on top. */
+NL.fixNutritionGaps=async(d,statusEl)=>{
+  const say=(t,err)=>{ if(statusEl){ statusEl.textContent=t; statusEl.classList.toggle('err',!!err); } };
+  const fix=NL._nutritionFix; if(!fix||fix.dayIdx!==d){ say('Nothing to fix for this day.',true); return; }
+  if(!fix.lowNutrients.length){ say('Nothing was low for this day.'); return; }
+  const ms=NL.members(); const m=ms.find(x=>x.id===fix.memberId); if(!m){ say('That family member wasn’t found.',true); return; }
+  if(!NL.aiOn()){ say(NL.aiErr({code:'not_configured'}),true); return; }
+  const w=st.weeks[st.idx];
+  if(fix.lastAdded&&fix.lastAdded.d===d){ const {slot,dish}=fix.lastAdded; const cell=w.days[d][slot]||[];
+    const i=cell.indexOf(dish); if(i>-1){ cell.splice(i,1); const k=d+'|'+slot; if(w.alt&&w.alt[k]) delete w.alt[k][dish]; }
+    fix.lastAdded=null; }
+  const names=fix.lowNutrients.map(g=>g.label).join(', ');
+  say('Finding a dish to help with '+names+'…');
+  const diet=(m.restr&&m.restr.diet)||'any';
+  const avoid=(fix.tried&&fix.tried.length)?`\nAlready suggested and turned down — don't pick these again: ${fix.tried.join(', ')}.`:'';
+  const slotDiets=SLOTS.map(([s])=>`${s}: ${NL.dietFor(w,d,s)}`).join(', ');
+  const prompt=`Suggest ONE dish for a home-cooked meal plan that would help a specific person who is low on: ${names}.
+This person's diet/allergy limits: ${diet}${(m.restr&&m.restr.allergens&&m.restr.allergens.length)?', avoid: '+m.restr.allergens.join(', '):''}.
+Their health conditions: ${m.conditions||'none'}.
+Each meal slot that day has its own food setting for the whole family (any/veg/egg/nonveg) — the dish MUST fit whichever slot you choose: ${slotDiets}.
+Pick a dish that's genuinely rich in one or more of those nutrients, realistic to cook at home, and safe given every limit above.${avoid}
+Reply with JSON only: {"dish":"<dish name>","slot":"<one of morningDrink,breakfast,morningSnack,lunchPacked,homeLunch,eveningSnack,dinner,nightDrink — pick the most natural meal for it>","why":"<reason, under 15 words>"}`;
+  try{
+    const out=await NL.ai(prompt,{maxTokens:1024});
+    const dish=out&&typeof out.dish==='string'&&out.dish.trim();
+    const slot=out&&SLOTS.some(([s])=>s===out.slot)?out.slot:null;
+    if(!dish||!slot){ say('Gemini didn’t give a usable dish. Press Fix nutrition gaps to try again.',true); return; }
+    const planDiet=NL.dietFor(w,d,slot); // "nonveg" here means the slot ALLOWS non-veg, not that it must be — same reading Suggest itself uses
+    if(NL.hardBlock(m,dish)||(planDiet!=='nonveg'&&!NL.dietOkFor(planDiet,dish))){
+      fix.tried=[...new Set([...(fix.tried||[]),dish])];
+      say('That suggestion doesn’t fit the plan. Press Fix nutrition gaps to try another.',true); return; }
+    const cell=w.days[d][slot]; if(!cell.includes(dish)) cell.push(dish);
+    const k=d+'|'+slot; w.alt=w.alt||{}; (w.alt[k]=w.alt[k]||{})[dish]=[...new Set([...(((w.alt[k]||{})[dish])||[]),m.id])];
+    fix.lastAdded={d,slot,dish}; fix.tried=[...new Set([...(fix.tried||[]),dish])];
+    save(); render(); if(typeof flashCell==='function') flashCell(w,d,slot,[dish]);
+    say('Added '+dish+' for '+m.name+(out.why?' — '+out.why:'')+'. Not the right dish? Press Fix nutrition gaps again for another.');
+  }catch(e){ say(NL.aiErr(e),true); }
+};
+
+/* Inject the "Fix nutrition gaps" button into the day dialog when a redo for that day is waiting. */
+{ const _openDaySuggest=openDaySuggest;
+  openDaySuggest=function(d){
+    _openDaySuggest(d);
+    const fix=NL._nutritionFix;
+    if(fix&&fix.dayIdx===d&&fix.lowNutrients&&fix.lowNutrients.length&&!$('dy-fixnutr')){
+      const row=document.querySelector('#mpo .rp-row');
+      if(row){ const btn=document.createElement('button'); btn.type='button'; btn.className='btn sec'; btn.id='dy-fixnutr';
+        btn.textContent='Fix nutrition gaps'; row.appendChild(btn);
+        btn.onclick=()=>NL.fixNutritionGaps(d,$('dy-status')); }
+    }
+  };
+}
 
 
 if(!st.weeks.length){st.weeks=[emptyWeek()];st.idx=0;save();}
