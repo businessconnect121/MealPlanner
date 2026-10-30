@@ -6001,7 +6001,14 @@ function cookEnglishVoices() {
 function cookPickVoice() {
   const list = cookEnglishVoices(); if (!list.length) return null;
   const chosen = cookPrefs().voice;
-  return (chosen && list.find(v => v.name === chosen)) || list.find(v => /^google us english/i.test(v.name)) || list.find(v => /karen/i.test(v.name) && /^en[-_]au/i.test(v.lang || '')) || list[0];   // first Google US English, then Karen (en-AU), then the best-scoring voice   // default: Karen (Australian English) when the device has it
+  if (chosen) { const m = list.find(v => v.name === chosen); if (m) return m; }   // an explicit pick in Settings is always honoured, network voice or not
+  // Auto pick: prefer a LOCAL (on-device) voice. A network voice like "Google US English" needs a live
+  // round trip to Google's TTS servers for every single utterance, and goes silently, completely silent —
+  // no error, no event — if that request is blocked (firewall, ad-blocker, flaky network). That's exactly
+  // why this was working in Safari (no network voices listed at all) and not in Chrome (which lists one
+  // and used to default to it). Local voices never have this failure mode, so they come first now.
+  const local = list.filter(v => v.localService), pool = local.length ? local : list;
+  return pool.find(v => /karen/i.test(v.name) && /^en[-_]au/i.test(v.lang || '')) || pool.find(v => /^google us english/i.test(v.name)) || pool[0];   // Karen (en-AU) if local, else any local voice, else (no local voice at all) fall back to a network one
 }
 function cookFillVoiceSelect() {
   const sel = document.getElementById('cook-voice-sel'); if (!sel) return;
@@ -7204,7 +7211,14 @@ function liveRunCommand(raw, typed) {
 const LIVE_ACT_PREFIX = COOK_CACHE_PREFIX + 'act8_';
 const LIVE_BACK_RE = /^(?:back|bag|bak|bach|go back|previous|previous one|last one|undo)$/;
 const LIVE_REPEAT_RE = /^(?:repeat|repeats|repeat that|again|say (?:that )?again|what was that|one more time|read it again)$/;
-const LIVE_DONE_RE = /^(?:ok(?:ay)? )?(?:done|dun|dunn|don|dawn|down|nex|finished|i'?m done|all done|next|next one|next please|next step|go on|got it|ok|okay|added|continue|i added it|did it)$/;
+/* Bare acknowledgements ("ok", "okay", "got it", "continue", "go on", "added", "did it") used to count as a
+   "move to the next step" command on their own. On a phone especially, people say these constantly as plain
+   verbal filler — and the mic's recognizer often splits one sentence into several separate "final" results —
+   so a filler word alone kept silently firing liveSmGo() and skipping a step nobody meant to skip. They're left
+   out here now; said alone they fall through to the AI intent classifier (liveSmInterpret) instead, which
+   actually looks at the current step and decides rather than guessing from the word alone. Paired with an
+   unambiguous word ("okay done", "ok next") they still work immediately, via the optional "ok(?:ay)? " prefix. */
+const LIVE_DONE_RE = /^(?:ok(?:ay)? )?(?:done|dun|dunn|don|dawn|down|nex|finished|i'?m done|all done|next|next one|next please|next step)$/;
 /* Interrupting the Chef mid-sentence is a bigger commitment than answering "done" once it's already listening for it,
    so only the unambiguous step words get to barge in. Bare acks like "ok"/"got it"/"continue" are left out here on
    purpose: said while the Chef is (seemingly) talking, they're far more often a filler/hum than a real "next step",
@@ -8022,10 +8036,17 @@ function liveVoiceTest() {
   L.testHold = Date.now() + 6000;
   if (L.rec) { try { L.rec.abort(); } catch {} }
   cookAecRelease();   // free the phone's mic-in-use audio mode so the voice can be heard
+  // If the cooking video is still playing behind Settings, its own sound was audible in the gap between the
+  // two test sentences (nothing had ever paused it for a Test). Pause it for the test and put it back after.
+  const st = S.liveStage;
+  let videoWasPlaying = false;
+  try { if (st && st.ready && liveVideoPlaying()) { st.player.pauseVideo(); videoWasPlaying = true; } } catch {}
   try { speechSynthesis.cancel(); speechSynthesis.resume(); } catch {}
   const v = cookPickVoice(); const note = liveEl('live-voice-note');
   if (note) { const sm = note.querySelector('small'); if (sm) sm.textContent = 'Playing' + (v ? ' “' + v.name + '”' : '') + '… if silent, raise the phone’s media volume and check the tab isn’t muted.'; }
-  setTimeout(() => cookSpeak("Hi, I'm your Chef. This is how I sound."), 150);
+  setTimeout(() => cookSpeak("Hi, I'm your Chef. This is how I sound.", () => {
+    if (videoWasPlaying) { try { st.player.playVideo(); } catch {} }
+  }), 150);
 }
 try { if (cookTTSOk()) speechSynthesis.addEventListener('voiceschanged', () => { const sh = document.getElementById('live-settings'); if (sh && !sh.hidden) liveFillVoices(); }); } catch {}
 function liveOptChange() {
