@@ -7344,7 +7344,10 @@ async function liveSmStart() {
   sm.acts = acts; sm.loading = false;
   const cs = st.idx >= 0 ? st.idx + 1 : 1, k = acts.findIndex(a => a.step >= cs);
   sm.i = k < 0 ? 0 : k;
-  liveSmShow();
+  liveSmShow(true);   // the very first action, right when step mode switches on: show the card and speak
+                       // it, but don't auto-play its clip — the cook presses play (or Done/next) when
+                       // ready, rather than video starting on its own the instant step mode is turned on.
+                       // Every later action still auto-plays its own clip once, as normal.
 }
 
 async function liveSmBuild() {
@@ -7586,15 +7589,21 @@ function liveMediaSyncState() {
 }
 function liveMediaTogglePlay() {
   const st = S.liveStage; if (!st || !st.ready) return;
-  // In step mode, a single press whenever there's no clip currently armed for the current action — right
-  // after entering/arriving at it (before the auto-play has had a chance to kick in) or right after this
-  // action's own clip played through to its own end — (re)starts THIS action's own clip properly: seeks to
-  // its start and arms its boundary, instead of just toggling play from whatever stale position the player
-  // happens to be sitting at. Any other time (mid-clip, or an early pause before the end, where the clip is
-  // still armed) it's a plain play/pause toggle.
-  if (liveSmOn() && !st.sm.clip) { st.sm.justEnded = false; liveSmShowVideo(); liveMediaSyncState(); return; }
   try { if (liveVideoPlaying()) st.player.pauseVideo(); else st.player.playVideo(); } catch {}
   liveMediaSyncState();
+}
+/* A single AirPod/media-key press is the one gesture iOS reliably delivers to a web page (it arrives as
+   'play' or 'pause' depending on current state — a real 'nexttrack' isn't reliably delivered at all), and
+   it means exactly one thing: "next step" — same as tapping "Done ✓", which plays that next action's own
+   clip once (not a cascade, just that one). Starting a step that hasn't played yet is a deliberate
+   on-screen action (▶ Show me / Done), never something a press does — so while nothing has played for
+   the CURRENT action yet (most notably the very first one, right after step mode switches on, which
+   deliberately doesn't auto-play), a press is a no-op: it stays right where it is, paused, rather than
+   starting or skipping anything. Play/pause itself stays reachable by voice or the on-screen controls. */
+function liveMediaPress() {
+  const st = S.liveStage; if (!st || !st.ready) return;
+  if (liveSmOn() && !st.sm.clip) return;
+  liveMediaNext(); liveMediaSyncState();
 }
 function liveMediaNext() {
   const st = S.liveStage; if (!st) return;
@@ -7616,8 +7625,8 @@ function liveMediaSessionOn() {
   try {
     const title = (S.live && S.live.data && S.live.data.title) || 'Cook Live';
     navigator.mediaSession.metadata = new MediaMetadata({ title, artist: 'NutriLens Cook Live' });
-    navigator.mediaSession.setActionHandler('play', liveMediaTogglePlay);
-    navigator.mediaSession.setActionHandler('pause', liveMediaTogglePlay);
+    navigator.mediaSession.setActionHandler('play', liveMediaPress);
+    navigator.mediaSession.setActionHandler('pause', liveMediaPress);
     navigator.mediaSession.setActionHandler('nexttrack', liveMediaNext);
     navigator.mediaSession.setActionHandler('previoustrack', liveMediaPrev);
     liveMediaSyncState();
