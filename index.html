@@ -1489,11 +1489,19 @@ body.mp-on #scr-main { margin-left: 0 !important; }
 .sm-h { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #ffcf8a; } .sm-h b { flex: 1; } .sm-sn { color: #aab; font-size: 12px; }
 .sm-x { background: none; border: 0; color: #fff; font-size: 18px; cursor: pointer; padding: 2px 6px; }
 .sm-main { font-size: 24px; font-weight: 700; line-height: 1.25; margin: 8px 0 6px; }
-.sm-l { font-size: 16px; line-height: 1.4; margin: 2px 0; } .sm-l span { color: #ffcf8a; } .sm-l.tip { color: #bde3ff; } .sm-l.dim { color: #aab; }
+.sm-l { font-size: 16px; line-height: 1.4; margin: 2px 0; } .sm-l span { color: #ffcf8a; } .sm-l.tip { color: #bde3ff; } .sm-l.dim { color: #aab; } .sm-l.warn { color: #ffb4a0; font-weight: 600; }
+.sm-ing { margin: 8px 0; padding: 8px 10px; background: rgba(255,255,255,.07); border-radius: 10px; max-height: 160px; overflow-y: auto; }
+.sm-ing-h { font-size: 13px; font-weight: 700; color: #ffcf8a; margin-bottom: 4px; }
+.sm-ing-grid { display: grid; grid-template-columns: max-content max-content; column-gap: 10px; row-gap: 5px; align-items: baseline; justify-content: start; }
+.sm-ing-n { font-size: 14px; color: #fff; }
+.sm-ing-q { font-size: 13px; color: #bde3ff; }
+.sm-ing-empty { font-size: 13px; color: #aab; }
 .sm-status { font-size: 13px; color: #9fd6ff; margin-top: 8px; min-height: 18px; }
 .sm-timer { font-size: 22px; font-weight: 700; margin: 6px 0; color: #7fe3a0; }
 .sm-b { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; } .sm-b .sm-done { margin-left: auto; font-size: 16px; padding: 10px 22px; }
-.live-sm-chip { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(64px, calc(env(safe-area-inset-bottom) + 56px)); z-index: 6; padding: 8px 14px; border-radius: 999px; border: 1px solid #ff9f1a; background: rgba(16,18,24,.9); color: #fff; font-size: 14px; cursor: pointer; font-family: inherit; }
+.live-sm-chip { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(64px, calc(env(safe-area-inset-bottom) + 56px)); z-index: 6; padding: 8px 14px; border-radius: 16px; border: 1px solid #ff9f1a; background: rgba(16,18,24,.92); color: #fff; font-size: 14px; cursor: pointer; font-family: inherit; max-width: min(92vw, 420px); text-align: center; line-height: 1.35; }
+.live-sm-chip .sm-chip-main { font-weight: 600; }
+.live-sm-chip .sm-chip-bits { font-size: 12.5px; color: #bde3ff; margin-top: 2px; white-space: normal; }
 .live-icon-btn.on { background: #ff9f1a; color: #000; }
 .live-sm-desc { margin: 0; font-size: 13px; line-height: 1.4; color: #aab; }
 .live-sm-desc b { color: #ffcf8a; }
@@ -6958,7 +6966,7 @@ async function liveOpenPlayer() {
     st.player = new YT.Player('live-yt', {
       videoId: st.id, playerVars: pv,
       events: {
-        onReady: e => { if (S.liveStage !== st) return; st.ready = true; try { e.target.playVideo(); } catch {} st.iv = setInterval(liveTick, 250); if (S.livePending) { const pc = S.livePending; S.livePending = null; setTimeout(() => { if (S.liveStage === st) liveRunCommand(pc, true); }, 700); } },
+        onReady: e => { if (S.liveStage !== st) return; st.ready = true; try { e.target.playVideo(); } catch {} st.iv = setInterval(liveTick, 250); liveMediaSessionOn(); if (S.livePending) { const pc = S.livePending; S.livePending = null; setTimeout(() => { if (S.liveStage === st) liveRunCommand(pc, true); }, 700); } },
         onError: e => liveYTError(st, e)
       }
     });
@@ -6985,6 +6993,7 @@ function liveToggleMin() {
 }
 function liveCloseStage() {
   try { liveSmOff(); } catch {}
+  try { liveMediaSessionOff(); } catch {}
   S.livePending = null;
   const st = S.liveStage; S.liveStage = null;
   if (st && st.iv) clearInterval(st.iv);
@@ -7083,9 +7092,12 @@ function liveVideoPlaying() {
 }
 function liveOpenReason() {   // why the Chef is listening without the wake word right now ('' = wake word needed)
   const L = S.cookListen; if (!(L.want && L.live) || !S.live) return '';
-  if (liveSmOn()) return 'step mode';   // step mode: only step commands (or "Chef…") — no open follow-up window
-  if (livePrefs().handsFree) return 'hands-free';
+  // The 15-second follow-up window after saying "Chef…" works the same in step mode as everywhere else:
+  // checked before the step-mode reason, so a question asked right after a wake word keeps the window
+  // open for follow-ups, instead of step mode's own narrower (command-only) listening taking back over.
   if (Date.now() < (L.followUntil || 0)) return 'follow-up';
+  if (liveSmOn()) return 'step mode';   // step mode outside that window: only step commands (or "Chef…")
+  if (livePrefs().handsFree) return 'hands-free';
   if (!liveVideoPlaying()) return 'paused';
   return '';
 }
@@ -7198,7 +7210,7 @@ function liveRunCommand(raw, typed) {
 /* ═════════════ Cook Live v3 — Step mode + typed commands ═════════════
    "Chef, step mode on": the video pauses and the Chef walks you through ONE action at a time (one ingredient, amount, flame…).
    Say "done" (or tap Done) for the next one. Amounts/flame come only from the video; anything else is a clearly marked suggestion. */
-const LIVE_ACT_PREFIX = COOK_CACHE_PREFIX + 'act4_';
+const LIVE_ACT_PREFIX = COOK_CACHE_PREFIX + 'act5_';
 const LIVE_BACK_RE = /^(?:back|bag|bak|bach|go back|previous|previous one|last one|undo)$/;
 const LIVE_REPEAT_RE = /^(?:repeat|repeats|repeat that|again|say (?:that )?again|what was that|one more time|read it again)$/;
 const LIVE_DONE_RE = /^(?:ok(?:ay)? )?(?:done|dun|dunn|don|dawn|down|nex|finished|i'?m done|all done|next|next one|next please|next step|go on|got it|ok|okay|added|continue|i added it|did it)$/;
@@ -7224,10 +7236,12 @@ function liveStepModeCommand(c, st) {
   if (LIVE_DONE_RE.test(c) || /^(?:skip|skip (?:this|that|it)|pass)$/.test(c)) { liveSmGo(1); return true; }
   if (LIVE_BACK_RE.test(c)) { liveSmGo(-1); return true; }
   if (LIVE_REPEAT_RE.test(c)) { liveSmShow(true); return true; }
+  if (LIVE_KEEPPLAY_RE.test(c)) { liveSmKeepPlaying(); return true; }
   if (/\b(how much|how many|what amount|what quantity)\b/.test(c)) { liveSmAmount(); return true; }
   if (/\b(show me|show that|show it|play that|watch that)\b/.test(c)) { liveSmShowVideo(); return true; }
   return false;
 }
+const LIVE_KEEPPLAY_RE = /\b(keep playing|just play|let it play|play through|don'?t stop|stop stopping|play (?:the )?rest|no more stopping)\b/;
 
 /* Pressing play on the video hides the card (you want to watch); pausing brings it back */
 function liveSmPlayWatch() {
@@ -7267,7 +7281,11 @@ When unsure, choose "none".`;
   } catch {}
   sm.interp = false; sm.thinking = false;
   if (S.liveStage !== st || st.sm !== sm || !sm.on) return;
-  sm.heardOk = intent !== 'none' && intent !== 'question' || (intent === 'question' && addressed);
+  // An utterance addressed to the Chef (after the wake word, or typed) is never just dropped on the floor:
+  // anything that isn't a recognised step command — including a classifier miss ("none") — still gets
+  // answered as a real question, any step, any time, so a genuine "wait, can I use butter instead?" always
+  // gets a clarification instead of silence.
+  sm.heardOk = addressed || (intent !== 'none' && intent !== 'question');
   switch (intent) {
     case 'next': liveSmGo(1); break;
     case 'back': liveSmGo(-1); break;
@@ -7276,7 +7294,7 @@ When unsure, choose "none".`;
     case 'show': liveSmShowVideo(); break;
     case 'exit': liveSmOff('Step mode off.'); break;
     case 'question': if (addressed) { try { S.sayHook.text('🤔 Thinking…', 30000); } catch {} cookAsk(raw); } break;
-    default: break;   // not for the assistant
+    default: if (addressed) { try { S.sayHook.text('🤔 Thinking…', 30000); } catch {} cookAsk(raw); } break;   // unsure which of the above it was — still ask, rather than silently ignore it
   }
   liveSmStatus();
 }
@@ -7298,15 +7316,15 @@ function liveSmWatch(t) {   // called from liveTick
   let x = -1; try { x = st.player.getPlayerState(); } catch {}
   const c = sm.clip;
   if (x === 1) c.played = true;
-  if (t >= c.end) liveSmReveal();            // end of this action's part: stop here
-  else if (x === 2 && c.played && Date.now() - c.at > 1500) { sm.clip = null; if (sm.hidden) liveSmReveal(); }   // it was playing and you paused it yourself (a slow start is not a pause)
+  if (t >= c.end) { sm.justEnded = true; liveSmReveal(); }            // end of this action's part: stop here, and a single AirPod/media-key press now replays it
+  else if (x === 2 && c.played && Date.now() - c.at > 1500) { sm.clip = null; if (sm.hidden) liveSmReveal(); }   // it was playing and you paused it yourself (a slow start is not a pause) — not a natural end, so no auto-replay-on-press
 }
 async function liveSmStart() {
   const st = S.liveStage, d = S.live && S.live.data; if (!st || !st.ready || !d) return;
   if (liveSmOn()) { liveSmShow(true); return; }
-  if (!(S.cookListen.want && S.cookListen.live)) liveListenOn();   // "done" needs the mic
+  if (livePrefs().cookMic && !(S.cookListen.want && S.cookListen.live)) liveListenOn();   // only if the user wants the mic on while cooking — step mode never overrides an explicit mic-off/mute
   try { st.player.pauseVideo(); } catch {}
-  const sm = (st.sm = { on: true, i: 0, acts: null, loading: true, tm: null });
+  const sm = (st.sm = { on: true, i: 0, acts: null, loading: true, tm: null, showIng: false, justEnded: false });
   liveEl('live-stage').classList.add('sm-on'); liveSmRender(); liveSmSyncBtns();
   let acts = lsGet(LIVE_ACT_PREFIX + S.live.id);
   if (!Array.isArray(acts) || !acts.length) acts = await liveSmBuild();
@@ -7328,13 +7346,14 @@ async function liveSmBuild() {
     const ingTxt = (d.ingredients || []).map(x => x.item + (x.quantity ? ' — ' + x.quantity : '')).join('\n');
     const prompt = `Watch this cooking video. The recipe's steps are:\n${stepsTxt}\n\nIngredients found in the video (with amounts):\n${ingTxt || '(none listed)'}\n
 Break the cooking into small hands-on ACTIONS for a cook who follows along one at a time.
-Return ONLY JSON: {"actions":[{"step":<1-based step number>,"do":"short imperative, ONE ingredient or ONE action, e.g. \\"Add oil\\" or \\"Stir the onions\\"","ingredient":<string or null>,"amount":<amount exactly as given in the video, e.g. "2 tbsp", or null if the video does not give it>,"heat":<flame/heat level ONLY if the video states or clearly shows it for this action, e.g. "low", "medium-high", else null>,"wait_sec":<number of seconds the cook must wait or cook before the next action, as shown in the video, else null>,"time":"MM:SS when this action starts in the video","end":"MM:SS when this action's part of the video ends (when the cook has finished doing it and the video moves on)","suggest_amount":<string or null>,"suggest_heat":<string or null>}]}
+Return ONLY JSON: {"actions":[{"step":<1-based step number>,"do":"short imperative, ONE ingredient or ONE action, e.g. \\"Add oil\\" or \\"Stir the onions\\"","ingredient":<string or null>,"amount":<amount exactly as given in the video, e.g. "2 tbsp", or null if the video does not give it>,"heat":<flame/heat level ONLY if the video states or clearly shows it for this action, e.g. "low", "medium-high", else null>,"wait_sec":<number of seconds the cook must wait or cook before the next action, as shown in the video, else null>,"time":"MM:SS when this action starts in the video","end":"MM:SS when this action's part of the video ends (when the cook has finished doing it and the video moves on)","suggest_amount":<string or null>,"suggest_heat":<string or null>,"watch":<string or null>}]}
 Rules:
 - One ingredient per action: "add oil, cardamom, ginger and bay leaf" becomes four actions, in the order shown.
 - amount and heat: use ONLY what the video gives: spoken aloud, shown as on-screen text, written in the description, or listed in the ingredients above. If the amount is given anywhere in the video, fill it in. Never guess; use null only when the video truly never gives it.
 - suggest_amount: ONLY when this action adds an ingredient and the video never gives its amount anywhere. A short amount like "about 2 tsp". If the video gives the amount, this MUST be null.
 - suggest_heat: ONLY when raising or lowering the flame would clearly help at this point and the video does not say so (e.g. "reduce the flame to low now"). If the video states the heat for this action, this MUST be null.
 - Do not add suggestions to every action; most actions should have both as null.
+- watch: ONLY when getting THIS action wrong is likely to spoil the dish — adding a liquid gradually to control dough/batter texture, a sugar/jaggery syrup's string or soft-ball stage, tempering eggs or dairy, reducing a sauce without burning or splitting it, folding a batter without deflating it, caramelizing or roasting something that scorches fast, a dough that needs to reach a specific feel. One short, practical sentence: what to look, feel, smell or listen for, and when to stop or move on. For ordinary actions (add salt, chop onions, switch on the stove, plate the dish) this MUST be null — most actions should have it null.
 - Keep actions in video order. At most 80 actions.`;
     const body = { contents: [{ parts: [{ fileData: { fileUri: 'https://www.youtube.com/watch?v=' + id } }, { text: prompt }] }],
       generationConfig: { temperature: 0.2, maxOutputTokens: 8000, responseMimeType: 'application/json' } };
@@ -7347,7 +7366,8 @@ Rules:
     const sx = (v, n) => { const t = String(v == null ? '' : v).trim().slice(0, n || 120); return /^(null|none|n\/a|not (?:given|shown|stated))$/i.test(t) ? '' : t; };
     if (Array.isArray(arr)) out = arr.map(a => ({
       step: Math.max(1, Math.round(+a?.step) || 1), do: sx(a?.do, 100), ingredient: sx(a?.ingredient, 60), amount: sx(a?.amount, 60), heat: sx(a?.heat, 40),
-      wait: (+a?.wait_sec > 0 && +a.wait_sec <= 7200) ? Math.round(+a.wait_sec) : 0, time: cookParseTs(a?.time), endT: cookParseTs(a?.end), sugA: sx(a?.suggest_amount, 100), sugH: sx(a?.suggest_heat, 120)
+      wait: (+a?.wait_sec > 0 && +a.wait_sec <= 7200) ? Math.round(+a.wait_sec) : 0, time: cookParseTs(a?.time), endT: cookParseTs(a?.end), sugA: sx(a?.suggest_amount, 100), sugH: sx(a?.suggest_heat, 120),
+      watch: sx(a?.watch, 220)
     })).filter(a => a.do).slice(0, 80);
     if (out) out.forEach(a => { if (!a.amount && a.ingredient) { const q = liveSmFindQty(a); if (q) a.amount = q; } if (a.amount) a.sugA = ''; if (a.heat) a.sugH = ''; });
     if (out && out.length) lsSet(LIVE_ACT_PREFIX + id, out);
@@ -7365,26 +7385,44 @@ function liveSmFindQty(a) {
   }
   return '';
 }
-/* what to show / say for one action */
+/* what to show / say for one action — ingredient+amount, flame and wait are ALWAYS stated (with an
+   explicit "not specified"/"No wait" fallback), not just when the video happens to give them, so the
+   cook never has to guess whether something was left out. A value the video never gave and the AI is
+   only suggesting is always written out with the word "suggest" (and spoken as "I'd suggest…") — never
+   silently blended in — so it's never mistaken for something the video actually said. */
 function liveSmParts(a) {
   const lines = [], say = [a.do.replace(/[.!?]+$/, '') + '.'];
-  if (a.amount) { lines.push({ k: 'Amount', v: a.amount }); say.push(a.amount + '.'); }
+  if (a.ingredient) {
+    if (a.amount) { lines.push({ k: 'Ingredient', v: a.ingredient + ' — ' + a.amount }); say.push(a.ingredient + ', ' + a.amount + '.'); }
+    else if (a.sugA) { lines.push({ k: 'Ingredient', v: a.ingredient + ' — suggest ' + a.sugA, tip: 1 }); say.push(a.ingredient + " — I'd suggest " + a.sugA + '.'); }
+    else { lines.push({ k: 'Ingredient', v: a.ingredient + ' — amount not given' }); say.push(a.ingredient + " — the video doesn't give an amount."); }
+  } else if (a.amount) {
+    lines.push({ k: 'Amount', v: a.amount }); say.push(a.amount + '.');
+  }
+  if (a.watch) { lines.push({ k: '⚠️ Careful', v: a.watch, warn: 1 }); say.push('Careful here — ' + a.watch.replace(/[.!?]+$/, '') + '.'); }
   if (a.heat) { lines.push({ k: 'Flame', v: a.heat }); say.push('Flame ' + a.heat + '.'); }
-  [a.amount ? '' : a.sugA, a.heat ? '' : a.sugH].filter(Boolean).forEach(t => { lines.push({ k: 'I’d suggest', v: t, tip: 1 }); say.push("I'd suggest " + t + '.'); });
-  if (a.wait) { lines.push({ k: 'Wait', v: cookFmtTime(a.wait) }); say.push('Then wait ' + cookFmtDur(a.wait) + '.'); }
-  return { lines, say: say.join(' ') };
+  else if (a.sugH) { lines.push({ k: 'Flame', v: 'suggest ' + a.sugH, tip: 1 }); say.push("I'd suggest " + a.sugH + ' flame.'); }
+  else { lines.push({ k: 'Flame', v: 'not specified' }); }
+  lines.push({ k: 'Wait', v: a.wait ? cookFmtTime(a.wait) : 'No wait' });
+  say.push(a.wait ? ('Then wait ' + cookFmtDur(a.wait) + '.') : 'No wait before the next one.');
+  return { lines, say: say.filter(Boolean).join(' ') };
 }
 const cookFmtDur = s => s >= 120 ? Math.round(s / 60) + ' minutes' : s >= 60 ? 'a minute' + (s > 60 ? ' ' + (s - 60) + ' seconds' : '') : s + ' seconds';
 
 function liveSmShow(again) {
   const st = S.liveStage, sm = st && st.sm; if (!sm || !sm.on || !sm.acts) return;
   const a = sm.acts[sm.i]; if (!a) return;
-  clearInterval(sm.tm); sm.tm = null; sm.tEnd = 0; sm.shownAt = Date.now();
+  clearInterval(sm.tm); sm.tm = null; sm.tEnd = 0; sm.shownAt = Date.now(); sm.justEnded = false;
   liveSmRender();
   const parts = liveSmParts(a);
   const my0 = sm.i;
-  if (cookPrefs().muted) { if (!again) cookChime(); }
-  else setTimeout(() => { if (liveSmOn() && st.sm === sm && sm.i === my0) cookSay(parts.say); }, 160);   // a beat after the stop, or Chrome can drop the speech
+  // By default, show this action's own part of the video once, right when you reach it — same as saying
+  // "show me", just automatic — not on a repeat (which already replays the same clip via the card's own
+  // "Show me" button), and only once we actually know where that part is in the video: an automatic
+  // trigger never falls back to the AI video-search ("liveFindMoment"), that stays opt-in only.
+  const autoShow = () => { if (!again && liveSmOn() && st.sm === sm && sm.i === my0) liveSmShowVideo(true); };
+  if (cookPrefs().muted) { if (!again) cookChime(); autoShow(); }
+  else setTimeout(() => { if (liveSmOn() && st.sm === sm && sm.i === my0) cookSay(parts.say, autoShow); }, 160);   // a beat after the stop, or Chrome can drop the speech
   if (a.wait >= 15 && !again) {   // a waiting action: count down, then move on by itself
     sm.tEnd = Date.now() + a.wait * 1000; const my = sm.i;
     sm.tm = setInterval(() => {
@@ -7408,11 +7446,11 @@ function liveSmAmount() {
   const t = a.amount ? a.amount + ' of ' + (a.ingredient || 'it') + '.' : (a.sugA ? "I'd suggest " + a.sugA + '.' : "I don't have an amount for that.");
   if (cookPrefs().muted) { try { S.sayHook.text(t, 6000); } catch {} } else cookSay(t);
 }
-function liveSmShowVideo() {
+function liveSmShowVideo(auto) {
   const st = S.liveStage, sm = st.sm, a = sm.acts && sm.acts[sm.i]; if (!a) return;
   let t0 = a.time;
   if (t0 == null) { const stp = S.live.data.steps[a.step - 1]; if (stp && stp.start != null) t0 = stp.start; }   // no exact moment: start of its recipe step
-  if (t0 == null) { cookStopSpeech(); liveFindMoment(a.do, a.do); return; }                                        // no time at all: have the AI look for it
+  if (t0 == null) { if (auto) return; cookStopSpeech(); liveFindMoment(a.do, a.do); return; }                      // no time at all: have the AI look for it — only when actually asked, never on the automatic default
   cookStopSpeech();
   // play just this action's part, then stop (pause) where the next action begins
   const nx = sm.acts[sm.i + 1], stp = S.live.data.steps[a.step - 1];
@@ -7440,20 +7478,58 @@ function liveSmOff(msg) {
   if (msg && st) { if (cookPrefs().muted) { try { S.sayHook.text(msg, 5000); } catch {} } else cookSay(msg); }
   cookRenderListen();
 }
+/* "Keep playing" / "just let it play": the cook wants to stop being stepped through one action at a time
+   and just watch the video run on its own from here — turns step mode off (same as the ✕) and, unlike
+   the ✕, actually resumes playback from wherever it currently is, since step mode usually leaves the
+   video paused on an action. Reachable by button or by voice ("Chef, keep playing" / "don't stop"). */
+function liveSmKeepPlaying() {
+  const st = S.liveStage; if (!st || !liveSmOn()) return;
+  liveSmOff("Okay, I'll just let it play. Say step mode on any time you want me back.");
+  try { st.player.playVideo(); } catch {}
+}
 function liveSmRender() {
   const st = S.liveStage, sm = st && st.sm, el = liveEl('live-sm'); if (!el) return;
   const chip = liveEl('live-sm-chip');
   if (!sm || !sm.on) { el.hidden = true; if (chip) chip.hidden = true; return; }
-  if (sm.hidden && !st.min && sm.acts) { el.hidden = true; if (chip) { chip.hidden = false; chip.textContent = '👨‍🍳 Step mode · ' + (sm.i + 1) + ' of ' + sm.acts.length + ' — tap for card'; } return; }
+  if (sm.hidden && !st.min && sm.acts) {
+    el.hidden = true;
+    if (chip) {
+      chip.hidden = false;
+      const act = sm.acts[sm.i];
+      // Minimized while the clip plays: still show what's needed (ingredient+qty, flame, wait, any
+      // careful-step warning) rather than just a bare step count, so there's no need to tap the card
+      // back just to check those. If the full ingredient list was toggled on, it stays visible here too.
+      const bits = act ? liveSmParts(act).lines.filter(l => l.k === 'Ingredient' || l.k === 'Amount' || l.k === 'Flame' || l.k === 'Wait' || l.k === '⚠️ Careful').map(l => cookEsc(l.k + ': ' + l.v)) : [];
+      chip.innerHTML = '<div class="sm-chip-main">👨‍🍳 Step ' + (sm.i + 1) + ' of ' + sm.acts.length + ' — tap for card</div>' +
+        (bits.length ? '<div class="sm-chip-bits">' + bits.join(' · ') + '</div>' : '') +
+        (sm.showIng ? liveSmIngHtml() : '');
+    }
+    return;
+  }
   if (chip) chip.hidden = true;
   el.hidden = false;
   if (sm.loading || !sm.acts) { el.innerHTML = `<div class="sm-h"><b>Step mode</b><button class="sm-x" onclick="liveSmOff()" aria-label="Exit step mode">✕</button></div><div class="sm-main">Preparing your steps from the video…</div>`; return; }
   const a = sm.acts[sm.i], p = liveSmParts(a), left = sm.tEnd ? Math.max(0, Math.ceil((sm.tEnd - Date.now()) / 1000)) : 0;
   el.innerHTML = `<div class="sm-h"><b>Step mode · ${sm.i + 1} of ${sm.acts.length}</b><span class="sm-sn">Recipe step ${a.step}</span><button class="sm-x" onclick="liveSmOff('Step mode off.')" aria-label="Exit step mode">✕</button></div>
     <div class="sm-main">${cookEsc(a.do)}</div>
-    ${p.lines.map(l => `<div class="sm-l${l.tip ? ' tip' : ''}${l.dim ? ' dim' : ''}"><span>${cookEsc(l.k)}:</span> ${cookEsc(l.v)}</div>`).join('')}
+    ${p.lines.map(l => `<div class="sm-l${l.tip ? ' tip' : ''}${l.dim ? ' dim' : ''}${l.warn ? ' warn' : ''}"><span>${cookEsc(l.k)}:</span> ${cookEsc(l.v)}</div>`).join('')}
+    ${sm.showIng ? liveSmIngHtml() : ''}
     ${left ? `<div class="sm-timer">⏱ ${cookFmtTime(left)}</div>` : ''}
-    <div class="sm-status" id="live-sm-status"></div><div class="sm-b">${sm.i > 0 ? '<button class="btn btn-ghost btn-sm" onclick="liveSmGo(-1)">‹ Back</button>' : ''}<button class="btn btn-ghost btn-sm" onclick="liveSmShow(true)">↻ Repeat</button><button class="btn btn-ghost btn-sm" onclick="liveSmShowVideo()">▶ Show me</button><button class="btn btn-ghost btn-sm" onclick="liveSmToggleVoice()">${cookPrefs().muted ? '🔇 Chef muted — tap to hear' : '🔊 Voice on'}</button><button class="btn btn-primary btn-sm sm-done" onclick="liveSmGo(1)">${sm.i >= sm.acts.length - 1 ? 'Finish ✓' : 'Done ✓'}</button></div>`;
+    <div class="sm-status" id="live-sm-status"></div><div class="sm-b"><button class="btn btn-ghost btn-sm" onclick="liveSmToggleIng()">${sm.showIng ? '✕ Ingredients' : '📋 Ingredients'}</button>${sm.i > 0 ? '<button class="btn btn-ghost btn-sm" onclick="liveSmGo(-1)">‹ Back</button>' : ''}<button class="btn btn-ghost btn-sm" onclick="liveSmShow(true)">↻ Repeat</button><button class="btn btn-ghost btn-sm" onclick="liveSmShowVideo()">▶ Show me</button><button class="btn btn-ghost btn-sm" onclick="liveSmKeepPlaying()" title="Turn step mode off and just let the video play on">▶▶ Keep playing</button><button class="btn btn-ghost btn-sm" onclick="liveSmToggleVoice()">${cookPrefs().muted ? '🔇 Chef muted — tap to hear' : '🔊 Voice on'}</button><button class="btn btn-primary btn-sm sm-done" onclick="liveSmGo(1)">${sm.i >= sm.acts.length - 1 ? 'Finish ✓' : 'Done ✓'}</button></div>`;
+}
+/* The full recipe ingredient list + quantities, shown on demand (tap "Ingredients") alongside the current
+   action's own single ingredient line — the two serve different needs: one tells you what's needed right
+   now, this tells you what's needed for the whole dish, e.g. to check you have everything before starting. */
+function liveSmIngHtml() {
+  const ing = (S.live && S.live.data && S.live.data.ingredients) || [];
+  return `<div class="sm-ing"><div class="sm-ing-h">All ingredients</div>${
+    ing.length ? `<div class="sm-ing-grid">${ing.map(x => `<span class="sm-ing-n">${cookEsc(x.item || '')}</span><span class="sm-ing-q">${x.quantity ? cookEsc(x.quantity) : ''}</span>`).join('')}</div>`
+      : '<div class="sm-ing-empty">No ingredient list was found for this video.</div>'
+  }</div>`;
+}
+function liveSmToggleIng() {
+  const sm = S.liveStage && S.liveStage.sm; if (!sm) return;
+  sm.showIng = !sm.showIng; liveSmRender();
 }
 
 /* ═════════════ Cook Live — Phase 3: steps and moments by voice ═════════════
@@ -7463,11 +7539,67 @@ function liveTick() {
   let t; try { t = st.player.getCurrentTime(); } catch { return; }
   if (typeof t !== 'number' || !isFinite(t)) return;
   st.t = t;
+  liveMediaSyncState();
   if (st.sm && st.sm.clip) liveSmWatch(t);
   if (st.sm) liveSmPlayWatch();
   if (st.loop && t >= st.loop.b) { try { st.player.seekTo(st.loop.a, true); } catch {} st.t = st.loop.a; return; }   // loop: back to the start
   let idx = -1; S.live.data.steps.forEach((s, i) => { if (s.start != null && s.start <= t + 0.5) idx = i; });
   if (idx !== st.idx) { st.idx = idx; liveRenderSteps(); }
+}
+
+/* ═════════════ Cook Live — AirPods / hardware media-key gestures ═════════════
+   iOS/macOS (and most desktop OSes) already turn an AirPods stem press into a standard Media Session
+   action for whatever page currently holds one: a single click → play/pause, a double click →
+   next-track, a triple click → previous-track. Wiring these three handlers is what lets the stem
+   control Cook Live hands-free — no custom click-counting needed, the OS already does that part.
+   Single click toggles the real video (works as an alternative to tapping ▶/⏸); double click does
+   exactly what tapping "Done ✓" does (next step/action); triple click does what "‹ Back" does. */
+function liveMediaSyncState() {
+  if (!('mediaSession' in navigator)) return;
+  try { navigator.mediaSession.playbackState = liveVideoPlaying() ? 'playing' : 'paused'; } catch {}
+}
+function liveMediaTogglePlay() {
+  const st = S.liveStage; if (!st || !st.ready) return;
+  // In step mode, a single press right after this action's own clip has played through to its own end
+  // replays it (seeking back to its start), instead of just resuming the main video from wherever the
+  // clip's end left it. Any other time (mid-clip, or an early pause before the end) it's a plain toggle.
+  if (liveSmOn() && st.sm.justEnded) { st.sm.justEnded = false; liveSmShowVideo(); liveMediaSyncState(); return; }
+  try { if (liveVideoPlaying()) st.player.pauseVideo(); else st.player.playVideo(); } catch {}
+  liveMediaSyncState();
+}
+function liveMediaNext() {
+  const st = S.liveStage; if (!st) return;
+  if (liveSmOn()) { liveSmGo(1); return; }   // same as tapping "Done ✓" in step mode
+  const cur = st.idx, n = (S.live && S.live.data && S.live.data.steps || []).length;
+  if (!n) return;
+  if (cur >= n - 1) { cookSay('That was the last step.'); return; }
+  liveJumpStep(Math.max(cur, 0) + 1);
+}
+function liveMediaPrev() {
+  const st = S.liveStage; if (!st) return;
+  if (liveSmOn()) { liveSmGo(-1); return; }   // same as tapping "‹ Back" in step mode
+  const cur = st.idx;
+  if (cur <= 0) { liveJumpStep(0, true); return; }
+  liveJumpStep(cur - 1);
+}
+function liveMediaSessionOn() {
+  if (!('mediaSession' in navigator)) return;
+  try {
+    const title = (S.live && S.live.data && S.live.data.title) || 'Cook Live';
+    navigator.mediaSession.metadata = new MediaMetadata({ title, artist: 'NutriLens Cook Live' });
+    navigator.mediaSession.setActionHandler('play', liveMediaTogglePlay);
+    navigator.mediaSession.setActionHandler('pause', liveMediaTogglePlay);
+    navigator.mediaSession.setActionHandler('nexttrack', liveMediaNext);
+    navigator.mediaSession.setActionHandler('previoustrack', liveMediaPrev);
+    liveMediaSyncState();
+  } catch {}
+}
+function liveMediaSessionOff() {
+  if (!('mediaSession' in navigator)) return;
+  try {
+    ['play', 'pause', 'nexttrack', 'previoustrack'].forEach(a => { try { navigator.mediaSession.setActionHandler(a, null); } catch {} });
+    navigator.mediaSession.playbackState = 'none';
+  } catch {}
 }
 function liveSeekPlay(sec, keepLoop) {
   const st = S.liveStage; if (!st || !st.ready) return;

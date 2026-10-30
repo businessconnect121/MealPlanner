@@ -918,6 +918,17 @@ const linkOf=d=>(st.favDishes&&st.favDishes[d]&&st.favDishes[d].video)||keptVide
 const catOf=d=>(RX.INFO[d]&&RX.INFO[d].cat)||POOL.cat[d]||'U';
 const nm=d=>linkOf(d)?`<a class="vid" draggable="false" href="${esc(linkOf(d))}" target="_blank" rel="noopener noreferrer" title="Watch a recipe video on YouTube">${esc(d)}<span class="play" aria-hidden="true">▶</span></a>`:esc(d);
 const item=d=>nm(d)+(catOf(d)==='H'?'<span class="ctag" title="Rated High FODMAP in the list">high</span>':catOf(d)==='V'?'<span class="ctag" title="Marked Verify in the list: not yet checked">verify</span>':catOf(d)==='U'?'':catOf(d)!=='L'?'<span class="lim" title="Limited item: keep to the listed portion / make as noted" aria-label="limited item"></span>':'');
+document.addEventListener('click',e=>{
+  const a=e.target.closest('a.vid'); if(!a) return;
+  let top=null;
+  try{ if(window.parent&&window.parent!==window&&typeof window.parent.navTo==='function'&&typeof window.parent.liveAnalyze==='function') top=window.parent; }catch(err){ top=null; }
+  if(!top) return;
+  e.preventDefault();
+  try{ if(top.S&&top.S.liveStage&&typeof top.liveCloseStage==='function') top.liveCloseStage(); }catch(err){}
+  const url=a.getAttribute('href')||'';
+  try{ const inp=top.document.getElementById('live-url'); if(inp) inp.value=url; }catch(err){}
+  try{ top.navTo('live'); top.liveAnalyze(); }catch(err){}
+});
 function make(seed,fishMeat,eggs){const seen=new Set(st.seen);const w=generateWeek(POOL,{seed,seen,fishMeat,eggs});return {seed,fishMeat,eggs,days:w,keys:[...seen].filter(k=>!st.seen.includes(k))};}
 function addWeek(){const fishMeat=document.getElementById('fish').checked,eggs=document.getElementById('eggs').checked;const seed=(Math.random()*2**31)>>>0;const w=make(seed,fishMeat,eggs);st.seen=st.seen.concat(w.keys).slice(-6000);delete w.keys;st.weeks.push(w);st.idx=st.weeks.length-1;save();render();}
 function render(){
