@@ -6964,7 +6964,7 @@ async function liveOpenPlayer() {
     st.player = new YT.Player('live-yt', {
       videoId: st.id, playerVars: pv,
       events: {
-        onReady: e => { if (S.liveStage !== st) return; st.ready = true; try { e.target.playVideo(); } catch {} st.iv = setInterval(liveTick, 250); liveMediaSessionOn(); if (S.livePending) { const pc = S.livePending; S.livePending = null; setTimeout(() => { if (S.liveStage === st) liveRunCommand(pc, true); }, 700); } },
+        onReady: e => { if (S.liveStage !== st) return; st.ready = true; try { e.target.playVideo(); } catch {} st.iv = setInterval(liveTick, 250); if (S.livePending) { const pc = S.livePending; S.livePending = null; setTimeout(() => { if (S.liveStage === st) liveRunCommand(pc, true); }, 700); } },
         onError: e => liveYTError(st, e)
       }
     });
@@ -6991,7 +6991,6 @@ function liveToggleMin() {
 }
 function liveCloseStage() {
   try { liveSmOff(); } catch {}
-  try { liveMediaSessionOff(); } catch {}
   S.livePending = null;
   const st = S.liveStage; S.liveStage = null;
   if (st && st.iv) clearInterval(st.iv);
@@ -7601,76 +7600,18 @@ function liveTick() {
   let t; try { t = st.player.getCurrentTime(); } catch { return; }
   if (typeof t !== 'number' || !isFinite(t)) return;
   st.t = t;
-  liveMediaSyncState();
   if (st.sm && st.sm.clip) liveSmWatch(t);
   if (st.loop && t >= st.loop.b) { try { st.player.seekTo(st.loop.a, true); } catch {} st.t = st.loop.a; return; }   // loop: back to the start
   let idx = -1; S.live.data.steps.forEach((s, i) => { if (s.start != null && s.start <= t + 0.5) idx = i; });
   if (idx !== st.idx) { st.idx = idx; liveRenderSteps(); }
 }
 
-/* ═════════════ Cook Live — AirPods / hardware media-key gestures ═════════════
-   iOS/macOS (and most desktop OSes) already turn an AirPods stem press into a standard Media Session
-   action for whatever page currently holds one: a single click → play/pause, a double click →
-   next-track, a triple click → previous-track. Wiring these three handlers is what lets the stem
-   control Cook Live hands-free — no custom click-counting needed, the OS already does that part.
-   Single click toggles the real video (works as an alternative to tapping ▶/⏸); double click does
-   exactly what tapping "Done ✓" does (next step/action); triple click does what "‹ Back" does. */
-function liveMediaSyncState() {
-  if (!('mediaSession' in navigator)) return;
-  try { navigator.mediaSession.playbackState = liveVideoPlaying() ? 'playing' : 'paused'; } catch {}
-}
-function liveMediaTogglePlay() {
-  const st = S.liveStage; if (!st || !st.ready) return;
-  try { if (liveVideoPlaying()) st.player.pauseVideo(); else st.player.playVideo(); } catch {}
-  liveMediaSyncState();
-}
-/* A single AirPod/media-key press is the one gesture iOS reliably delivers to a web page (it arrives as
-   'play' or 'pause' depending on current state — a real 'nexttrack' isn't reliably delivered at all), and
-   it means exactly one thing: "next step" — same as tapping "Done ✓", which plays that next action's own
-   clip once (not a cascade, just that one). Starting a step that hasn't played yet is a deliberate
-   on-screen action (▶ Show me / Done), never something a press does — so while nothing has played for
-   the CURRENT action yet (most notably the very first one, right after step mode switches on, which
-   deliberately doesn't auto-play), a press is a no-op: it stays right where it is, paused, rather than
-   starting or skipping anything. Play/pause itself stays reachable by voice or the on-screen controls. */
-function liveMediaPress() {
-  const st = S.liveStage; if (!st || !st.ready) return;
-  if (liveSmOn() && !st.sm.clip) return;
-  liveMediaNext(); liveMediaSyncState();
-}
-function liveMediaNext() {
-  const st = S.liveStage; if (!st) return;
-  if (liveSmOn()) { liveSmGo(1); return; }   // same as tapping "Done ✓" in step mode
-  const cur = st.idx, n = (S.live && S.live.data && S.live.data.steps || []).length;
-  if (!n) return;
-  if (cur >= n - 1) { cookSay('That was the last step.'); return; }
-  liveJumpStep(Math.max(cur, 0) + 1);
-}
-function liveMediaPrev() {
-  const st = S.liveStage; if (!st) return;
-  if (liveSmOn()) { liveSmGo(-1); return; }   // same as tapping "‹ Back" in step mode
-  const cur = st.idx;
-  if (cur <= 0) { liveJumpStep(0, true); return; }
-  liveJumpStep(cur - 1);
-}
-function liveMediaSessionOn() {
-  if (!('mediaSession' in navigator)) return;
-  try {
-    const title = (S.live && S.live.data && S.live.data.title) || 'Cook Live';
-    navigator.mediaSession.metadata = new MediaMetadata({ title, artist: 'NutriLens Cook Live' });
-    navigator.mediaSession.setActionHandler('play', liveMediaPress);
-    navigator.mediaSession.setActionHandler('pause', liveMediaPress);
-    navigator.mediaSession.setActionHandler('nexttrack', liveMediaNext);
-    navigator.mediaSession.setActionHandler('previoustrack', liveMediaPrev);
-    liveMediaSyncState();
-  } catch {}
-}
-function liveMediaSessionOff() {
-  if (!('mediaSession' in navigator)) return;
-  try {
-    ['play', 'pause', 'nexttrack', 'previoustrack'].forEach(a => { try { navigator.mediaSession.setActionHandler(a, null); } catch {} });
-    navigator.mediaSession.playbackState = 'none';
-  } catch {}
-}
+/* Media Session / AirPod stem-press handling was removed: the OS shows a Lock Screen / Control Center
+   "Now Playing" card for ANY page using it, with its own play/pause/skip buttons — so it wasn't only an
+   AirPods click that reached this page. A phone call arriving, Siri, another app taking audio focus, or
+   just brushing the Lock Screen widget in a pocket all send the same play/pause signal, and both were
+   wired to "advance to the next step," which silently skipped steps for reasons that had nothing to do
+   with cooking at all. Cook Live no longer touches navigator.mediaSession. */
 function liveSeekPlay(sec, keepLoop) {
   const st = S.liveStage; if (!st || !st.ready) return;
   if (!keepLoop && st.loop) { st.loop = null; liveRenderLoop(); }   // any jump ends a loop
