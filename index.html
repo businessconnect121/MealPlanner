@@ -7244,13 +7244,16 @@ function liveStepModeCommand(c, st) {
 }
 const LIVE_KEEPPLAY_RE = /\b(keep playing|just play|let it play|play through|don'?t stop|stop stopping|play (?:the )?rest|no more stopping)\b/;
 
-/* Pressing play on the video hides the card (you want to watch); pausing brings it back */
-function liveSmPlayWatch() {
-  const st = S.liveStage, sm = st && st.sm; if (!sm || !sm.on || !sm.acts || st.min) return;
-  if (Date.now() - (sm.shownAt || 0) < 1500) return;
-  let x; try { x = st.player.getPlayerState(); } catch { return; }
-  if (!sm.hidden && x === 1) { sm.hidden = true; sm.hideAt = Date.now(); sm.byPlay = true; liveSmRender(); }
-  else if (sm.hidden && sm.byPlay && (x === 2 || x === 0) && !sm.clip && Date.now() - sm.hideAt > 1500) { sm.byPlay = false; sm.hidden = false; sm.shownAt = Date.now(); liveSmRender(); }
+/* Minimizing the card to the small floating pill (while the clip keeps playing underneath) is now a
+   manual choice the cook makes — the ▾ button on the card, or the pill itself to bring the card back —
+   never automatic. Neither direction touches playback or the clip boundary; it's purely a view toggle. */
+function liveSmMinimize() {
+  const sm = S.liveStage && S.liveStage.sm; if (!sm || !sm.on) return;
+  sm.hidden = true; liveSmRender();
+}
+function liveSmUnminimize() {
+  const sm = S.liveStage && S.liveStage.sm; if (!sm || !sm.on || !sm.hidden) return;
+  sm.hidden = false; liveSmRender();
 }
 /* Anything that is not one of the fixed phrases: ask the AI what the cook means (next / back / repeat / amount / show / exit / question / none) */
 const LIVE_SM_HINT = /\b(done|finish\w*|next|back|previous|again|repeat|ready|move|go|continue|did|added|put|poured|ok|okay|alright|yes|yeah|what|how|show|skip|wait|pardon|sorry|stop|got|set)\b/;
@@ -7482,7 +7485,7 @@ function liveSmShowVideo(auto) {
   }
   liveSeekPlay(t0 - COOK_LEAD_IN);
   sm.clip = { end, at: Date.now() };
-  if (!st.min) { sm.hidden = true; sm.byPlay = false; sm.hideAt = Date.now(); liveSmRender(); }
+  liveSmRender();   // the card stays up while the clip plays now — minimizing to the small pill is a manual choice (the ▾ button), not automatic
 }
 function liveSmToggleVoice() {
   liveToggleMute();
@@ -7534,7 +7537,7 @@ function liveSmRender() {
   el.hidden = false;
   if (sm.loading || !sm.acts) { el.innerHTML = `<div class="sm-h"><b>Step mode</b><button class="sm-x" onclick="liveSmOff()" aria-label="Exit step mode">✕</button></div><div class="sm-main">Preparing your steps from the video…</div>`; return; }
   const a = sm.acts[sm.i], p = liveSmParts(a), left = sm.tEnd ? Math.max(0, Math.ceil((sm.tEnd - Date.now()) / 1000)) : 0;
-  el.innerHTML = `<div class="sm-h"><b>Step mode · ${sm.i + 1} of ${sm.acts.length}</b><span class="sm-sn">Recipe step ${a.step}</span><button class="sm-x" onclick="liveSmOff('Step mode off.')" aria-label="Exit step mode">✕</button></div>
+  el.innerHTML = `<div class="sm-h"><b>Step mode · ${sm.i + 1} of ${sm.acts.length}</b><span class="sm-sn">Recipe step ${a.step}</span>${!st.min ? '<button class="sm-x" onclick="liveSmMinimize()" aria-label="Minimize to a small pill while the video plays" title="Minimize">▾</button>' : ''}<button class="sm-x" onclick="liveSmOff('Step mode off.')" aria-label="Exit step mode">✕</button></div>
     <div class="sm-main">${cookEsc(a.do)}</div>
     ${p.lines.map(l => `<div class="sm-l${l.tip ? ' tip' : ''}${l.dim ? ' dim' : ''}${l.warn ? ' warn' : ''}"><span>${cookEsc(l.k)}:</span> ${cookEsc(l.v)}</div>`).join('')}
     ${sm.showIng ? liveSmIngHtml() : ''}
@@ -7565,7 +7568,6 @@ function liveTick() {
   st.t = t;
   liveMediaSyncState();
   if (st.sm && st.sm.clip) liveSmWatch(t);
-  if (st.sm) liveSmPlayWatch();
   if (st.loop && t >= st.loop.b) { try { st.player.seekTo(st.loop.a, true); } catch {} st.t = st.loop.a; return; }   // loop: back to the start
   let idx = -1; S.live.data.steps.forEach((s, i) => { if (s.start != null && s.start <= t + 0.5) idx = i; });
   if (idx !== st.idx) { st.idx = idx; liveRenderSteps(); }
@@ -8071,7 +8073,7 @@ initWelcome();
     </div>
   </div>
   <div class="live-sm" id="live-sm" hidden aria-live="polite"></div>
-  <button class="live-sm-chip" id="live-sm-chip" hidden onclick="liveSmReveal()"></button>
+  <button class="live-sm-chip" id="live-sm-chip" hidden onclick="liveSmUnminimize()"></button>
   <div class="live-caption" id="live-caption" hidden aria-live="polite" onclick="liveStopChef()" title="Tap to stop the Chef"></div>
   <div class="live-panel" id="live-panel">
     <div class="live-ask">
