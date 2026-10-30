@@ -1496,6 +1496,8 @@ body.mp-on #scr-main { margin-left: 0 !important; }
 .sm-ing-n { font-size: 14px; color: #fff; }
 .sm-ing-q { font-size: 13px; color: #bde3ff; }
 .sm-ing-empty { font-size: 13px; color: #aab; }
+.sm-ing-prep { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,.12); }
+.sm-ing-prep-txt { font-size: 13.5px; color: #fff; line-height: 1.45; white-space: pre-line; }
 .sm-status { font-size: 13px; color: #9fd6ff; margin-top: 8px; min-height: 18px; }
 .sm-timer { font-size: 22px; font-weight: 700; margin: 6px 0; color: #7fe3a0; }
 .sm-b { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; } .sm-b .sm-done { margin-left: auto; font-size: 16px; padding: 10px 22px; }
@@ -7211,7 +7213,7 @@ function liveRunCommand(raw, typed) {
 /* ═════════════ Cook Live v3 — Step mode + typed commands ═════════════
    "Chef, step mode on": the video pauses and the Chef walks you through ONE action at a time (one ingredient, amount, flame…).
    Say "done" (or tap Done) for the next one. Amounts/flame come only from the video; anything else is a clearly marked suggestion. */
-const LIVE_ACT_PREFIX = COOK_CACHE_PREFIX + 'act7_';
+const LIVE_ACT_PREFIX = COOK_CACHE_PREFIX + 'act8_';
 const LIVE_BACK_RE = /^(?:back|bag|bak|bach|go back|previous|previous one|last one|undo)$/;
 const LIVE_REPEAT_RE = /^(?:repeat|repeats|repeat that|again|say (?:that )?again|what was that|one more time|read it again)$/;
 const LIVE_DONE_RE = /^(?:ok(?:ay)? )?(?:done|dun|dunn|don|dawn|down|nex|finished|i'?m done|all done|next|next one|next please|next step|go on|got it|ok|okay|added|continue|i added it|did it)$/;
@@ -7335,13 +7337,14 @@ async function liveSmStart() {
   if (liveSmOn()) { liveSmShow(true); return; }
   if (livePrefs().cookMic && !(S.cookListen.want && S.cookListen.live)) liveListenOn();   // only if the user wants the mic on while cooking — step mode never overrides an explicit mic-off/mute
   try { st.player.pauseVideo(); } catch {}
-  const sm = (st.sm = { on: true, i: 0, acts: null, loading: true, tm: null, showIng: false, justEnded: false });
+  const sm = (st.sm = { on: true, i: 0, acts: null, prep: '', loading: true, tm: null, showIng: false, justEnded: false });
   liveEl('live-stage').classList.add('sm-on'); liveSmRender(); liveSmSyncBtns();
-  let acts = lsGet(LIVE_ACT_PREFIX + S.live.id);
-  if (!Array.isArray(acts) || !acts.length) acts = await liveSmBuild();
+  let built = lsGet(LIVE_ACT_PREFIX + S.live.id);
+  if (!built || !Array.isArray(built.acts) || !built.acts.length) built = await liveSmBuild();
   if (S.liveStage !== st || st.sm !== sm || !sm.on) return;
+  const acts = built && built.acts;
   if (!acts || !acts.length) { liveSmOff("Sorry, I couldn't prepare step mode for this video. Try again in a moment."); return; }
-  sm.acts = acts; sm.loading = false;
+  sm.acts = acts; sm.prep = built.prep || ''; sm.loading = false;
   const cs = st.idx >= 0 ? st.idx + 1 : 1, k = acts.findIndex(a => a.step >= cs);
   sm.i = k < 0 ? 0 : k;
   liveSmShow(true);   // the very first action, right when step mode switches on: show the card and speak
@@ -7360,8 +7363,9 @@ async function liveSmBuild() {
     const ingTxt = (d.ingredients || []).map(x => x.item + (x.quantity ? ' — ' + x.quantity : '')).join('\n');
     const prompt = `Watch this cooking video. The recipe's steps are:\n${stepsTxt}\n\nIngredients found in the video (with amounts):\n${ingTxt || '(none listed)'}\n
 Break the cooking into small hands-on ACTIONS for a cook who follows along one at a time.
-Return ONLY JSON: {"actions":[{"step":<1-based step number>,"do":"short imperative, ONE ingredient or ONE action, e.g. \\"Add oil\\" or \\"Stir the onions\\"","ingredient":<string or null>,"amount":<amount exactly as given in the video, e.g. "2 tbsp", or null if the video does not give it>,"heat":<flame/heat level ONLY if the video states or clearly shows it for this action, e.g. "low", "medium-high", else null>,"wait_sec":<number of seconds the cook must wait or cook before the next action, as shown in the video, else null>,"time":"MM:SS when this action starts in the video","end":"MM:SS when this action's part of the video ends (when the cook has finished doing it and the video moves on)","suggest_amount":<string or null>,"suggest_heat":<string or null>,"watch":<string or null>,"watch_say":<string or null>}]}
+Return ONLY JSON: {"prep":<string or null — everything the cook should do BEFORE following along step by step: chopping/mincing/peeling, soaking, marinating, bringing something to room temperature, measuring out spices, toasting/grinding something ahead, etc. — see the "prep" rule below>,"actions":[{"step":<1-based step number>,"do":"short imperative, ONE ingredient or ONE action, e.g. \\"Add oil\\" or \\"Stir the onions\\"","ingredient":<string or null>,"amount":<amount exactly as given in the video, e.g. "2 tbsp", or null if the video does not give it>,"heat":<flame/heat level ONLY if the video states or clearly shows it for this action, e.g. "low", "medium-high", else null>,"wait_sec":<number of seconds the cook must wait or cook before the next action, as shown in the video, else null>,"time":"MM:SS when this action starts in the video","end":"MM:SS when this action's part of the video ends (when the cook has finished doing it and the video moves on)","suggest_amount":<string or null>,"suggest_heat":<string or null>,"watch":<string or null>,"watch_say":<string or null>}]}
 Rules:
+- prep: a short, scannable list of everything worth doing AHEAD of time, before starting to follow the steps — look at how ingredients are actually used in the video (e.g. if diced onions just appear in a bowl, that means "dice the onions" is a prep step) and at the ingredients list. Call out anything with real lead time especially clearly (soaking rice/lentils/nuts, marinating meat or paneer, resting a dough, bringing butter/eggs to room temperature), since those are the easiest to forget and most costly to skip. Keep it concrete and specific to this recipe (ingredient + what to do to it, e.g. "Soak 1 cup rice for 20 minutes", "Mince 1 tbsp ginger and garlic", "Marinate the chicken for at least 30 minutes"), not a generic "prep your ingredients". Null only if the video is genuinely just one or two simple steps with nothing to prep ahead.
 - One ingredient per action: "add oil, cardamom, ginger and bay leaf" becomes four actions, in the order shown.
 - amount and heat: use ONLY what the video gives: spoken aloud, shown as on-screen text, written in the description, or listed in the ingredients above. If the amount is given anywhere in the video, fill it in. Never guess; use null only when the video truly never gives it.
 - suggest_amount: ONLY when this action adds an ingredient and the video never gives its amount anywhere. A short amount like "about 2 tsp". If the video gives the amount, this MUST be null.
@@ -7378,16 +7382,18 @@ Rules:
     const txt = (data?.candidates?.[0]?.content?.parts || []).filter(p => !p.thought && typeof p.text === 'string').map(p => p.text).join('');
     const j = cookExtractJson(txt), arr = Array.isArray(j) ? j : (j && j.actions);
     const sx = (v, n) => { const t = String(v == null ? '' : v).trim().slice(0, n || 120); return /^(null|none|n\/a|not (?:given|shown|stated))$/i.test(t) ? '' : t; };
+    const prep = Array.isArray(j) ? '' : sx(j && j.prep, 600);
     if (Array.isArray(arr)) out = arr.map(a => ({
       step: Math.max(1, Math.round(+a?.step) || 1), do: sx(a?.do, 100), ingredient: sx(a?.ingredient, 60), amount: sx(a?.amount, 60), heat: sx(a?.heat, 40),
       wait: (+a?.wait_sec > 0 && +a.wait_sec <= 7200) ? Math.round(+a.wait_sec) : 0, time: cookParseTs(a?.time), endT: cookParseTs(a?.end), sugA: sx(a?.suggest_amount, 100), sugH: sx(a?.suggest_heat, 120),
       watch: sx(a?.watch, 420), watchSay: sx(a?.watch_say, 160)
     })).filter(a => a.do).slice(0, 80);
     if (out) out.forEach(a => { if (!a.amount && a.ingredient) { const q = liveSmFindQty(a); if (q) a.amount = q; } if (a.amount) a.sugA = ''; if (a.heat) a.sugH = ''; if (!a.watch) a.watchSay = ''; });
-    if (out && out.length) lsSet(LIVE_ACT_PREFIX + id, out);
+    if (out && out.length) { out = { acts: out, prep }; lsSet(LIVE_ACT_PREFIX + id, out); }
+    else out = null;
   } catch (e) { out = null; }
   finally { if (S.cookAskCtrl === ctrl) { S.cookAskCtrl = null; S.cookAsking = false; } }
-  return out;
+  return out;   // { acts, prep } — see liveSmStart()
 }
 
 function liveSmFindQty(a) {
@@ -7568,7 +7574,10 @@ function liveSmRender() {
    now, this tells you what's needed for the whole dish, e.g. to check you have everything before starting. */
 function liveSmIngHtml() {
   const ing = (S.live && S.live.data && S.live.data.ingredients) || [];
-  return `<div class="sm-ing"><div class="sm-ing-h">All ingredients</div>${
+  const prep = S.liveStage && S.liveStage.sm && S.liveStage.sm.prep;
+  return `<div class="sm-ing">
+    ${prep ? `<div class="sm-ing-prep"><div class="sm-ing-h">🔪 Prep before you start</div><div class="sm-ing-prep-txt">${cookEsc(prep)}</div></div>` : ''}
+    <div class="sm-ing-h">All ingredients</div>${
     ing.length ? `<div class="sm-ing-grid">${ing.map(x => `<span class="sm-ing-n">${cookEsc(x.item || '')}</span><span class="sm-ing-q">${x.quantity ? cookEsc(x.quantity) : ''}</span>`).join('')}</div>`
       : '<div class="sm-ing-empty">No ingredient list was found for this video.</div>'
   }</div>`;
