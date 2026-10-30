@@ -51,7 +51,9 @@ function gemini(prompt) {
       if (global.mockSame) dishes = [cs.find(x => /coconut chutney/i.test(x)) || cs.find(x => /filter coffee/i.test(x)) || cs.find(x => /^apple/i.test(x)) || cs[0]];
       if (global.mockSkip && /\|morningSnack$/.test(k)) dishes = [];
       const alt = []; if (!guest && !global.mockNoAlt) for (const d of dishes) { const r = raw[cs.indexOf(d)] || ''; const mm = r.match(/not for (M\d)/); if (mm) { const j = raw.findIndex(x => !x.includes('not for ' + mm[1]) && !dishes.includes(x.replace(/ \[[^\]]*\]$/, ''))); if (j >= 0) alt.push({ dish: cs[j], for: [mm[1]] }); } }
-      return { k, dishes, alt, new: /try new/i.test(prompt) ? ['Millet surprise bowl'] : [], why: 'test' }; }),
+      const ytHint = c.match(/YouTube idea\(s\) found for this meal, already real and already popular — prefer these exact names if they fit: (.*)$/);
+      const nw = ytHint ? [ytHint[1].split('; ')[0]] : /try new/i.test(prompt) ? ['Millet surprise bowl'] : [];
+      return { k, dishes, alt, new: nw, why: 'test' }; }),
       understood: { week: ['Idli batter ×6', 'Cook Mon & Wed'], days: { '6': ['Guests for lunch'] }, meals: {} }, guests: /guests coming sunday lunch/i.test(prompt) ? ['6|homeLunch'] : [] });
   }
   if (/List the RAW ingredients, as bought from a shop, for ONE serving/.test(prompt)) {
@@ -69,6 +71,10 @@ function gemini(prompt) {
   if (/Match the items the user says/.test(prompt) && /kalonji/.test(prompt)) { const said = prompt.split('<said>')[1].split('</said>')[0]; return J({ m: [], unmatched: said.split(', ') }); }
   if (/Match what the user says/.test(prompt)) return J({ m: [{ key: 'carrot', have: true, amt: null }], unmatched: ['paneer'] });
   if (/Candidates \(number/.test(prompt)) return J({ picks: [{ n: 1, why: 'ok' }] });
+  if (/is telling a meal-planning app/.test(prompt)) {
+    const corrected = /Their newest message, which you're now responding to: .*tuesday/is.test(prompt);
+    return J({ reply: corrected ? 'Got it — I’ll plan for Tuesday instead of Thursday, keeping everything else the same.' : 'Sounds like you want something light for this meal, with no upma. I’ll aim for that — anything else?' });
+  }
   return J({});
 }
 /* mock of netlify/functions/meal-master.mjs (same request/response shape) */
@@ -81,6 +87,12 @@ function blobRoute(route) { const r = route.request(); const send = (st, o) => r
 function youtube(url) {
   ytCalls++; const u = new URL(url);
   if (u.pathname.endsWith('/playlists')) return { items: [{ snippet: { title: 'My Recipes' } }] };
+  if (u.pathname.endsWith('/search')) { global.ytSearchQueries = global.ytSearchQueries || []; global.ytSearchQueries.push(u.searchParams.get('q'));
+    return { items: [
+      { id: { videoId: 'ns1' }, snippet: { title: 'Millet Veggie Medley Bowl Recipe', channelId: 'chBig' } },
+      { id: { videoId: 'ns2' }, snippet: { title: 'Idli Recipe (South Indian)', channelId: 'chSmall' } },
+      { id: { videoId: 'ns3' }, snippet: { title: 'Ragi Zucchini Crunch Recipe', channelId: 'chBig' } } ] }; }
+  if (u.pathname.endsWith('/channels')) return { items: u.searchParams.get('id').split(',').map(id => ({ id, statistics: { subscriberCount: id === 'chBig' ? '5000000' : '1200' } })) };
   const all = [{ vid: 'v1', t: 'Ragi Dosa Recipe | Instant breakfast', d: 'Ingredients: ragi flour, rice flour, onion' }, { vid: 'v2', t: "Amma's Kadala Curry in Tamil", d: '' },
     { vid: 'v3', t: 'Chicken 65 restaurant style', d: '' }, { vid: 'v4', t: 'Private video', d: '' }];
   const items = ytPhase === 1 ? all : [all[0], all[2], { vid: 'v5', t: 'Lemon Rice Recipe', d: '' }];
@@ -122,11 +134,13 @@ function youtube(url) {
   ok(await p.evaluate(() => st.family.name === 'Iyer family' && st.family.goals['3'].weightloss === true), 'rename family + planner-only goal change saved');
   ok(await p.evaluate(() => !JSON.parse(localStorage.getItem('nl_profiles'))[2].conditions), 'profile itself unchanged');
   ok((await p.$$eval('#thead .dpeople', e => e.length)) === 7, 'every day shows 👥 headcount');
-  await p.click('#thead .dpeople[data-day="6"]'); await p.fill('#dy-people', '15'); await p.waitForTimeout(50);
-  ok(await p.$eval('#mpo-body .gprompt', e => !e.hidden), 'raising headcount above family size asks “Cooking for guests?”');
+  await p.click('#thead .dpeople[data-day="6"]'); await p.fill('#dy-people', '15'); await p.press('#dy-people', 'Enter');
+  let w = await W(); ok(w.meta.days[6].people === 15, 'Sunday headcount set to 15 right on the day header, no dialog needed');
+  await p.click('#thead .daysug[data-daysug="6"]');
+  ok(await p.$eval('#mpo-body .gprompt', e => !e.hidden), 'raising headcount above family size asks “Cooking for guests?” when Suggest day opens next');
   await p.click('#mpo-body .gprompt button'); ok(await p.$eval('#dy-guest', e => e.checked), 'one tap makes it a guest day');
   await p.fill('#dy-gnote', '2 vegetarian guests'); await p.click('#dy-save');
-  let w = await W(); ok(w.meta.days[6].people === 15 && w.meta.days[6].guest === true, 'Sunday saved: 15 people, guest day');
+  w = await W(); ok(w.meta.days[6].people === 15 && w.meta.days[6].guest === true, 'Sunday saved: 15 people, guest day');
   ok(/🎉/.test(await p.$eval('#thead .dpeople[data-day="6"]', e => e.textContent)), 'day header shows 🎉');
   // meal-level override
   await p.click('#tbody .mopt[data-mo="6|dinner"]'); await p.fill('#ml-people', '3'); await p.uncheck('#ml-guest'); await p.selectOption('#ml-time', '15'); await p.click('#ml-save');
@@ -134,9 +148,9 @@ function youtube(url) {
   ok(/Guest meal/.test(await p.$eval('#tbody td[data-cell="6|homeLunch"] .mtag', e => e.textContent)) && /3 family \+ 12 guests/.test(await p.$eval('#tbody td[data-cell="6|homeLunch"] .mtag', e => e.textContent)), 'guest meal tag: “3 family + 12 guests”');
 
   console.log('\nStep 8 — planning settings');
-  await p.click('#thead .dpeople[data-day="1"]'); await p.selectOption('#dy-diet', 'veg'); await p.click('#dy-save');
+  await p.click('#thead .daysug[data-daysug="1"]'); await p.selectOption('#dy-diet', 'veg'); await p.click('#dy-save');
   ok(/veg/.test(await p.$eval('#thead .dpeople[data-day="1"]', e => e.textContent)) && await p.evaluate(() => NL.dietFor(st.weeks[st.idx], 1) === 'veg'), 'Tuesday set to vegetarian');
-  await p.click('#regen'); await p.selectOption('#wk-nov', 'fav'); await p.selectOption('#wk-time', '60'); await p.click('#wk-save');
+  await p.click('#regen'); await p.selectOption('#wk-nov', 'fav'); await p.selectOption('#wk-time', '60'); await p.click('#mpo-x');
   ok(await p.evaluate(() => st.weeks[st.idx].meta.week.novelty === 'fav' && NL.timeFor(st.weeks[st.idx], 0, 'breakfast') === '60' && NL.timeFor(st.weeks[st.idx], 6, 'dinner') === '15'), 'week defaults (familiar, 1 hr) with meal override (15 min)');
 
   console.log('\nStep 2 — YouTube favourites');
@@ -173,7 +187,7 @@ function youtube(url) {
   const fillNow = async (btn, status) => { await p.evaluate(() => NL.status('')); await p.click(btn); await p.waitForFunction(() => /Filled \d+ meal|Nothing to fill|don't ask|isn't set up/.test(document.getElementById('b2status').textContent), null, { timeout: 15000 }); };
   const base0 = await filledKeys();
   ok(await p.evaluate(() => !document.getElementById('weekbtn')), 'the separate Suggest week button is gone');
-  await p.click('#regen'); ok(/Regenerate week/.test(await p.$eval('#mpo-title', e => e.textContent)) && await p.$('#wk-sug') !== null, 'Regenerate week opens the requirements box first');
+  await p.click('#regen'); ok(/Suggest week/.test(await p.$eval('#mpo-title', e => e.textContent)) && await p.$('#wk-sug') !== null, 'Suggest week opens the requirements box first');
   await p.fill('#wk-sug', 'Breakfast: no upma or pongal. Lunch: more greens and dal.'); await p.selectOption('#wk-nov', 'mix'); await fillNow('#wk-fill');
   let wR = await W(); const nAll = wR.days.reduce((a, dd) => a + Object.values(dd).filter(x => x.length).length, 0);
   ok(nAll === 56, `Regenerate week plans every meal (${nAll} of 56)`);
@@ -186,15 +200,15 @@ function youtube(url) {
   ok(!(await p.$eval('#mpo', d => d.open)), 'dialog closes after regenerating so the week is visible');
   await p.click('#toast-undo'); ok((await filledKeys()).join() === base0.join() && (await W()).days[0].lunchPacked.join('+') === 'Lemon rice+Carrot poriyal', 'one Undo brings the previous week back');
   let newK;
-  await p.click('#thead .dpeople[data-day="3"]'); await p.fill('#dy-sug', 'idli for breakfast'); await fillNow('#dy-fill');
+  await p.click('#thead .daysug[data-daysug="3"]'); await p.fill('#dy-sug', 'idli for breakfast'); await fillNow('#dy-fill');
   newK = (await filledKeys()).filter(k => !base0.includes(k)); ok(newK.join() === '3|breakfast', 'day box on Thursday “idli for breakfast” → only Thursday breakfast');
-  await p.click('#toast-undo'); await p.click('#thead .dpeople[data-day="3"]'); await p.fill('#dy-sug', ''); await p.click('#dy-save');
+  await p.click('#toast-undo'); await p.click('#thead .daysug[data-daysug="3"]'); await p.fill('#dy-sug', ''); await p.click('#dy-save');
   // general request + day and meal boxes
-  await p.click('#regen'); await p.fill('#wk-sug', 'I have idli batter I can use 5-6 times. I will cook only Monday and Wednesday.'); await p.click('#wk-save');
-  await p.click('#thead .dpeople[data-day="6"]'); await p.fill('#dy-sug', 'guests coming sunday lunch, festive'); await p.click('#dy-save');
+  await p.click('#regen'); await p.fill('#wk-sug', 'I have idli batter I can use 5-6 times. I will cook only Monday and Wednesday.'); await p.click('#mpo-x');
+  await p.click('#thead .daysug[data-daysug="6"]'); await p.fill('#dy-sug', 'guests coming sunday lunch, festive'); await p.click('#dy-save');
   await p.click('#tbody .mopt[data-mo="2|dinner"]'); await p.fill('#ml-sug', 'light, 15 minutes'); await p.click('#ml-save');
   const before = await W();
-  await p.click('#regen'); await p.check('#wk-keep'); await fillNow('#wk-fill');
+  await p.click('#regen'); await p.uncheck('#wk-redo'); await fillNow('#wk-fill');
   w = await W(); const fp = prompts.filter(x => /You plan home meals/.test(x));
   ok(fp.some(x => /Week box: I have idli batter/.test(x)) && fp.some(x => /Day box \(Sunday\): guests coming/.test(x)) && fp.some(x => /Meal box \(Wednesday Dinner\): light, 15 minutes/.test(x)), 'week, day and meal boxes all sent to Gemini');
   ok(/MEAL box beats the DAY box, the DAY box beats the ROW box \(one meal on every day\), and the ROW box beats the WEEK box/.test(fp[0]), 'precedence rule given: meal > day > row > week for conflicts');
@@ -549,12 +563,12 @@ function youtube(url) {
     const a = t("don't repeat wednesday meals"), b = t('dont repeat yesterday'), c = t('different from Wednesday'), e = t('no repeats this week'), f = t("Don't repeat Wednesday's dishes");
     m.days[3].suggest = keep; return a.avoidDays.join() === '2' && b.avoidDays.join() === '2' && c.avoidDays.join() === '2' && e.noRepeat && f.avoidDays.join() === '2'; }), 'understands “don\'t repeat Wednesday meals”, “dont repeat yesterday”, “different from Wednesday”, “no repeats”');
   await p.evaluate(() => { const w = st.weeks[st.idx]; Object.keys(w.days[3]).forEach(s => w.days[3][s] = []); save(); render(); });
-  await p.click('#thead .dpeople[data-day="3"]'); await p.fill('#dy-sug', "don't repeat wednesday meals"); await p.click('#dy-fill');
+  await p.click('#thead .daysug[data-daysug="3"]'); await p.fill('#dy-sug', "don't repeat wednesday meals"); await p.click('#dy-fill');
   await p.waitForFunction(() => !NL.pending, null, { timeout: 30000 }); await p.waitForTimeout(200);
   { const wd = await W(); const wed = new Set(Object.values(wd.days[2]).flat()); const thu = Object.values(wd.days[3]).flat();
     ok(thu.length > 5 && !thu.some(n => wed.has(n)), `Thursday filled with nothing from Wednesday (${thu.length} dishes, 0 repeats)`); }
   ok(await p.evaluate(() => SLOTS.every(([s]) => st.weeks[st.idx].days[3][s].length)), 'a general day request fills all 8 meals of the day');
-  await p.click('#thead .dpeople[data-day="3"]'); await p.fill('#dy-sug', ''); await p.click('#dy-save');
+  await p.click('#thead .daysug[data-daysug="3"]'); await p.fill('#dy-sug', ''); await p.click('#dy-save');
 
   console.log('\nAny number of dishes in a meal');
   await p.evaluate(() => { const w = st.weeks[st.idx]; w.days[5].dinner = []; const names = Object.keys(RX.INFO).filter(n => RX.INFO[n].bits & 64).slice(0, 30); placeInto(5, 'dinner', names, false); });
@@ -584,9 +598,11 @@ function youtube(url) {
   await p.click('#grobtn'); ok(await p.isVisible('#gro-plan') && /no dishes yet/.test(await p.$eval('#mpo-body', e => e.textContent)), 'an empty week shows the general grocery list, with “Plan the week with what I have”');
   { const cats = await p.$$eval('#mpo-body .gcat .lbl', e => e.map(x => x.textContent.split(' (')[0].trim()));
     ok(cats[0].startsWith('Vegetables') && cats[1].startsWith('Fruits') && cats.some(c => /Dairy/.test(c)) && cats.some(c => /Pantry basics/.test(c)), 'sorted by category, vegetables and fruits first: ' + cats.join(' · ')); }
-  ok(await p.$eval('[data-have="salt"]', e => e.checked) && !(await p.$eval('[data-have="onion"]', e => e.checked)), 'salt and other basics start ticked; vegetables start unticked');
+  ok(await p.$eval('[data-have="salt"]', e => e.checked) && !(await p.$eval('[data-have="onion"]', e => e.checked)) && !(await p.$eval('[data-have="chicken"]', e => e.checked)) && await p.$eval('[data-have="milk"]', e => e.checked) && await p.$eval('[data-have="rice"]', e => e.checked), 'salt, dairy and pantry start ticked; vegetables, fruits and meat/fish start unticked');
+  const baseN = parseInt((await p.$eval('#mpo-sub', e => e.textContent)).match(/(\d+) ticked as at home/)[1], 10);
   await p.click('[data-have="carrot"]'); await p.click('[data-have="banana"]');
-  ok(await p.evaluate(() => st.pantry.have.carrot.t && st.pantry.have.banana.t) && /2 ticked as at home/.test(await p.$eval('#mpo-sub', e => e.textContent)), 'tick carrot and banana: saved, count updates without jumping the list');
+  const afterN = parseInt((await p.$eval('#mpo-sub', e => e.textContent)).match(/(\d+) ticked as at home/)[1], 10);
+  ok(await p.evaluate(() => st.pantry.have.carrot.t && st.pantry.have.banana.t) && afterN === baseN + 2, 'tick carrot and banana: saved, count updates without jumping the list');
   await p.fill('#gro-find', 'gourd'); ok(await p.$$eval('#mpo-body li.gi:not([hidden])', e => e.length >= 4 && e.every(x => /gourd/i.test(x.textContent))), '“Find an item” narrows the list (gourds)'); await p.fill('#gro-find', '');
   await p.fill('#gro-say', 'I have onion, tomato, toor dal, ragi flour, kalonji seeds'); await p.click('#gro-apply'); await p.waitForTimeout(200);
   ok(await p.evaluate(() => ['onion', 'tomato', 'toor dal', 'ragi flour'].every(k => (st.pantry.have[k] || {}).t)) && await p.$eval('[data-have="onion"]', e => e.checked), 'typed items tick the list');
@@ -597,7 +613,7 @@ function youtube(url) {
   await p.evaluate(() => { const r = window.__sr[window.__sr.length - 1]; r.onresult({ resultIndex: 0, results: [{ 0: { transcript: "apples that's all" }, isFinal: true, length: 1 }] }); }); await p.waitForTimeout(200);
   ok(await p.evaluate(() => (st.pantry.have.apple || {}).t && !NL.groVoice), '…until “that\'s all”');
   await p.click('#gro-pantry .pchip-x'); ok(await p.evaluate(() => !Object.keys(st.pantry.have).some(k => /kalonji/.test(k))), '× removes an extra item');
-  await p.click('#gro-plan'); ok(/Regenerate week/.test(await p.$eval('#mpo-title', e => e.textContent)) && /groceries I have at home/.test(await p.$eval('#wk-sug', e => e.value)), '“Plan the week with what I have” opens Regenerate with that request');
+  await p.click('#gro-plan'); ok(/Suggest week/.test(await p.$eval('#mpo-title', e => e.textContent)) && /groceries I have at home/.test(await p.$eval('#wk-sug', e => e.value)), '“Plan the week with what I have” opens Suggest week with that request');
   await p.click('#wk-fill'); await p.waitForFunction(() => !NL.pending, null, { timeout: 30000 });
   ok(prompts.filter(x => /You plan home meals/.test(x)).slice(-1)[0].match(/Groceries already at home \(ticked in Groceries\): [^\n]*ragi flour/) !== null, 'the week is planned with your groceries sent to Gemini');
   await p.click('#grobtn'); await p.click('#gro-clear'); ok(/Tap again/.test(await p.$eval('#gro-clear', e => e.textContent)), 'Clear list asks for a second tap');
@@ -606,7 +622,7 @@ function youtube(url) {
 
   console.log('\nRow box “add … every day” adds, doesn\'t replace');
   await p.evaluate(() => { const w = st.weeks[st.idx]; w.days.forEach((dd, i) => dd.morningDrink = i === 3 ? [] : ['Filter coffee']); save(); render(); });
-  await p.click('#tbody .rowsug[data-rs="morningDrink"]'); ok(!(await p.$eval('#rw-replace', e => e.checked)), 'Replace is unticked');
+  await p.click('#tbody .rowsug[data-rs="morningDrink"]'); ok(await p.$eval('#rw-replace', e => e.checked), 'Replace is ticked by default (fills all 7)');
   await p.fill('#rw-sug', 'add methi kalonji water everyday'); await p.click('#rw-fill'); await p.waitForFunction(() => !NL.pending, null, { timeout: 30000 }); await p.waitForTimeout(200);
   { const md = (await W()).days.map(dd => dd.morningDrink);
     ok(md.every(x => x.some(n => /methi kalonji water/i.test(n))), 'methi kalonji water is in every morning drink');
@@ -659,13 +675,127 @@ function youtube(url) {
 
   console.log('\nFood type and time in every suggest box');
   await p.click('#regen'); ok(await p.$('#wk-diet') && await p.$('#wk-time'), 'Regenerate week: Food + Time to cook'); await p.keyboard.press('Escape');
-  await p.click('#thead .dpeople[data-day="2"]'); ok(await p.$('#dy-diet') && await p.$('#dy-time'), 'Day: Food + Time to cook'); await p.selectOption('#dy-time', '30'); await p.click('#dy-save');
+  await p.click('#thead .daysug[data-daysug="2"]'); ok(await p.$('#dy-diet') && await p.$('#dy-time'), 'Day: Food + Time to cook'); await p.selectOption('#dy-time', '30'); await p.click('#dy-save');
   await p.click('#tbody .rowsug[data-rs="dinner"]'); ok(await p.$('#rw-diet') && await p.$('#rw-time'), 'Row: Food + Time to cook'); await p.selectOption('#rw-diet', 'nonveg'); await p.click('#rw-save');
   await p.click('#tbody .mopt[data-mo="2|dinner"]'); ok(await p.$('#ml-diet') && await p.$('#ml-time') && /Default \(20–30 min\)/.test(await p.$eval('#ml-time option', e => e.textContent)), 'Meal: Food + Time to cook, showing what it inherits (day: 20–30 min)');
   await p.selectOption('#ml-diet', 'veg'); await p.click('#ml-save');
   ok(await p.evaluate(() => { const w = st.weeks[st.idx]; return NL.dietFor(w, 2, 'dinner') === 'veg' && NL.dietFor(w, 3, 'dinner') === 'nonveg' && NL.timeFor(w, 2, 'breakfast') === '30'; }), 'meal beats day beats row beats week (Wed dinner veg; other dinners non-veg from the row; Wed 30 min from the day)');
   ok(await p.evaluate(() => { const w = st.weeks[st.idx]; return ![...slotCandidates(w, 2, 'dinner', false, NL.dietFor(w, 2, 'dinner'), 'mix').keys()].some(n => NL.isNonveg(n)); }), 'a veg meal only gets vegetarian candidates');
   await p.evaluate(() => { const m = st.weeks[st.idx].meta; delete m.meals['2|dinner'].diet; m.days[2].time = ''; m.rows.dinner.diet = ''; save(); });
+
+  console.log('\nCheck for family: also available at meal, row and day level (not just the whole week)');
+  await p.evaluate(() => { for (const k of Object.keys(st.suit)) delete st.suit[k]; });
+  await p.click('#tbody .mopt[data-mo="4|homeLunch"]');
+  ok(!!(await p.$('#ml-check')), 'meal dialog offers "Check for family" once the meal has dishes');
+  { const before = prompts.length; await p.click('#ml-check');
+    await p.waitForFunction(() => /Checked \d+ dish/.test(document.getElementById('ml-status').textContent), null, { timeout: 20000 });
+    ok(prompts.slice(before).some(x => /You check whether dishes suit/.test(x)), 'meal-level Check for family actually asks Gemini, scoped to just this meal');
+    ok(!(await p.$eval('#mpo', d => d.open)), 'and closes the dialog when it\'s done, the same way Suggest does'); }
+  await p.evaluate(() => { for (const k of Object.keys(st.suit)) delete st.suit[k]; });
+  await p.click('#thead .daysug[data-daysug="4"]');
+  ok(!!(await p.$('#dy-check')), 'day dialog offers "Check for family" once the day has dishes');
+  { const before = prompts.length; await p.click('#dy-check');
+    await p.waitForFunction(() => /Checked \d+ dish/.test(document.getElementById('dy-status').textContent), null, { timeout: 20000 });
+    ok(prompts.slice(before).some(x => /You check whether dishes suit/.test(x)), 'day-level Check for family asks Gemini for the whole day');
+    ok(!(await p.$eval('#mpo', d => d.open)), 'and closes the dialog too'); }
+  await p.evaluate(() => { for (const k of Object.keys(st.suit)) delete st.suit[k]; });
+  await p.click('#tbody .rowsug[data-rs="homeLunch"]');
+  ok(!!(await p.$('#rw-check')), 'row dialog offers "Check for family" once some meal in the row has dishes');
+  { const before = prompts.length; await p.click('#rw-check');
+    await p.waitForFunction(() => /Checked \d+ dish/.test(document.getElementById('rw-status').textContent), null, { timeout: 20000 });
+    ok(prompts.slice(before).some(x => /You check whether dishes suit/.test(x)), 'row-level Check for family asks Gemini across every day’s home lunch');
+    ok(!(await p.$eval('#mpo', d => d.open)), 'and closes the dialog too'); }
+
+  console.log('\nCheck understanding: a conversational, plain-language read-back of a suggest box');
+  await p.click('#tbody .mopt[data-mo="1|homeLunch"]');
+  await p.fill('#ml-sug', 'no upma, something light');
+  ok(!!(await p.$('#ml-sug-cu')), '"Check understanding" sits next to the instant local preview');
+  { const before = prompts.length; await p.click('#ml-sug-cu');
+    await p.waitForFunction(() => document.querySelector('#ml-chat .chatlog'), null, { timeout: 20000 });
+    const sent = prompts.slice(before).filter(x => /is telling a meal-planning app/.test(x));
+    ok(sent.some(x => /This box is only for: Tuesday Home lunch/.test(x)), 'it\'s told exactly which meal/day this box is for, so it never has to ask');
+    ok(sent.some(x => /never ask which days or meals they mean/.test(x)), 'and is told explicitly not to ask that');
+    ok(sent.some(x => /type 2 diabetes/.test(x)), 'it also gets the family\'s health conditions, in case it needs them'); }
+  ok(/Gemini/.test(await p.$eval('#ml-chat .chatlog', e => e.textContent)), 'pressing it gets a plain-language reply from Gemini, not just the local preview');
+  ok(await p.evaluate(() => { const mm = st.weeks[st.idx].meta.meals['1|homeLunch']; return Array.isArray(mm.chat) && mm.chat.length === 1 && mm.chat[0].role === 'ai'; }), 'the reply is saved on the meal’s own settings, so it survives reopening the dialog');
+  ok(await p.$('#ml-sug-cu') === null, 'once a chat has started, "Check understanding" (or "Ask again") gets out of the way — correcting is enough');
+  await p.fill('#ml-sug-cr', 'actually I meant Tuesday, not Thursday');
+  await p.click('#ml-sug-cs');
+  await p.waitForFunction(() => document.querySelectorAll('#ml-chat .cmsg').length >= 3, null, { timeout: 20000 });
+  ok(await p.evaluate(() => st.weeks[st.idx].meta.meals['1|homeLunch'].chat.length === 3), 'a correction keeps the back-and-forth going (your correction + a fresh Gemini reply)');
+  ok(/Tuesday/.test(await p.$eval('#ml-chat .chatlog', e => e.textContent)), 'the newest reply reflects the correction');
+  { const before = prompts.length; await p.click('#ml-fill'); await p.waitForFunction(() => !NL.pending, null, { timeout: 30000 });
+    ok(prompts.slice(before).some(x => /Also clarified in chat/.test(x) && /Tuesday instead of Thursday/.test(x)), 'the clarified understanding — not just the box’s own text — is sent along the next time Suggest/Fill runs for real'); }
+  ok(await p.$('#wk-sug') === null, 'no stray dialog left open after Suggest closes it');
+  await p.click('#tbody .mopt[data-mo="1|homeLunch"]');
+  ok(await p.evaluate(() => st.weeks[st.idx].meta.meals['1|homeLunch'].chat.length === 3) && await p.$('#ml-sug-cu') === null, 'reopening the meal still shows the earlier chat, with no "Check understanding"/"Ask again" button needlessly offered again');
+  await p.click('#ml-sug-ccl');
+  ok(await p.evaluate(() => st.weeks[st.idx].meta.meals['1|homeLunch'].chat.length === 0), '"Clear chat" wipes it so a new suggestion text can start fresh');
+  ok(!!(await p.$('#ml-sug-cu')) && await p.$('#ml-sug-cr') === null, 'back to the plain "Check understanding" starting state');
+  await p.click('#ml-save');
+  await p.click('#regen'); ok(!!(await p.$('#wk-sug-cu')), 'week dialog has the same "Check understanding" button'); await p.keyboard.press('Escape');
+  await p.click('#tbody .rowsug[data-rs="dinner"]'); ok(!!(await p.$('#rw-sug-cu')), 'row dialog has the same "Check understanding" button'); await p.click('#rw-save');
+  await p.click('#thead .daysug[data-daysug="2"]'); ok(!!(await p.$('#dy-sug-cu')), 'day dialog has the same "Check understanding" button'); await p.click('#dy-save');
+
+  console.log('\nNewly placed dishes flash, the same way Suggest/Add now do as ⇄, +Add and drag already did');
+  await p.evaluate(() => { const w = st.weeks[st.idx]; w.days[5].breakfast = []; save(); render(); });
+  await p.click('#tbody .mopt[data-mo="5|breakfast"]'); await p.fill('#ml-sug', ''); await p.click('#ml-fill');
+  await p.waitForFunction(() => !NL.pending, null, { timeout: 30000 }); await p.waitForTimeout(80);
+  ok(await p.evaluate(() => [...document.querySelectorAll('li[data-c^="5|breakfast|"]')].some(li => li.classList.contains('just'))), 'Suggest flashes the newly placed dishes');
+  await p.click('#tbody .mopt[data-mo="5|breakfast"]'); await p.fill('#ml-sug', ''); await p.click('#ml-add');
+  await p.waitForFunction(() => !NL.pending, null, { timeout: 30000 }); await p.waitForTimeout(80);
+  ok(await p.evaluate(() => [...document.querySelectorAll('li[data-c^="5|breakfast|"]')].some(li => li.classList.contains('just'))), '"Add to this meal" flashes the newly added dish too — not just Suggest');
+  await p.click('#tbody .mopt[data-mo="5|breakfast"]'); await p.fill('#ml-sug', ''); await p.click('#ml-save');
+
+  console.log('\nA dish you remove isn\'t immediately offered back to that same meal');
+  ok(await p.evaluate(() => { const w = st.weeks[st.idx]; w.avoid = w.avoid || {}; w.avoid['6|eveningSnack'] = ['Methi kalonji water']; const cand = slotCandidates(w, 6, 'eveningSnack', false, NL.dietFor(w, 6, 'eveningSnack'), 'mix'); return !cand.has('Methi kalonji water'); }), 'a dish marked "avoid" for a meal is excluded from that meal’s own candidate list');
+  await p.evaluate(() => { const w = st.weeks[st.idx]; w.avoid = {}; w.days[6].eveningSnack = ['Methi kalonji water', 'Filter coffee']; save(); render(); });
+  await p.click('li[data-c="6|eveningSnack|0"] .rm[data-x="6|eveningSnack|0"]');
+  ok(await p.evaluate(() => ((st.weeks[st.idx].avoid || {})['6|eveningSnack'] || []).includes('Methi kalonji water')), 'deleting a dish (×) remembers it as "don’t bring this back here" for that meal');
+  await p.evaluate(() => { const w = st.weeks[st.idx]; w.avoid = {}; w.days[0].dinner = ['Lemon rice', 'Potato poriyal']; save(); render(); });
+  await p.click('#thead .dclear[data-dc="0"]');
+  ok(await p.evaluate(() => { const av = (st.weeks[st.idx].avoid || {})['0|dinner'] || []; return av.includes('Lemon rice') && av.includes('Potato poriyal'); }), 'Clear day remembers everything it removed, the same way');
+
+  console.log('\n♥ Delicious to: a per-family-member marker, separate from the ★ favourite-to-cook');
+  // "Suggest week" no longer lets a run skip specific days (that whole "Days to redo" picker was removed),
+  // so by now the full-week fills above have long since overwritten Monday breakfast. Plant Idli back for this block.
+  await p.evaluate(() => { const w = st.weeks[st.idx]; w.days[0].breakfast = ['Idli']; if (st.family.loved) delete st.family.loved['Idli']; save(); render(); });
+  ok(await p.evaluate(() => document.querySelector('li[data-c="0|breakfast|0"]').textContent.includes('Idli')), 'sanity: Monday breakfast still has Idli');
+  ok(!!(await p.$('li[data-c="0|breakfast|0"] .heart')), 'every dish has a ♥ button in the markup');
+  ok((await p.$eval('li[data-c="0|breakfast|0"] .heart', e => getComputedStyle(e).display)) === 'none', 'unmarked, it stays hidden until you ask to mark favourites');
+  await p.click('#markfavbtn');
+  ok((await p.$eval('#markfavbtn', e => e.getAttribute('aria-pressed'))) === 'true' && (await p.$eval('li[data-c="0|breakfast|0"] .heart', e => getComputedStyle(e).display)) !== 'none', '"Mark favourite dishes" reveals every heart, filled or not');
+  ok(!(await p.$eval('li[data-c="0|breakfast|0"] .heart', e => e.classList.contains('on'))), 'starts unmarked — nobody has said they love it yet');
+  await p.click('li[data-c="0|breakfast|0"] .heart');
+  ok(!(await p.$eval('#mpo', d => d.open)), 'with "View as: Everyone", tapping an unmarked heart does not open any dialog');
+  ok(await p.evaluate(() => { const ms = NL.members(); const ids = st.family.loved['Idli'] || []; return ms.length === 3 && ms.every(m => ids.includes(m.id)); }), 'instead it marks the dish loved for every family member at once');
+  ok(await p.$eval('li[data-c="0|breakfast|0"] .heart', e => e.classList.contains('on') && /Asha/.test(e.title) && /Meera/.test(e.title) && /Ravi/.test(e.title)), 'the ♥ fills in and names everyone');
+  const otherHeartHidden = () => p.evaluate(() => { const h = [...document.querySelectorAll('li[data-c] .heart')].find(e => !e.classList.contains('on')); return h ? getComputedStyle(h).display === 'none' : null; });
+  ok((await otherHeartHidden()) === false, 'an unmarked heart elsewhere is still visible while "Mark favourite dishes" stays on');
+  await p.click('#markfavbtn');
+  ok((await otherHeartHidden()) === true && (await p.$eval('li[data-c="0|breakfast|0"] .heart', e => getComputedStyle(e).display)) !== 'none', 'turning it off hides unmarked hearts again, but the marked one for Idli stays visible');
+  await p.selectOption('#viewas', '2'); // View as Ravi
+  await p.click('li[data-c="0|breakfast|0"] .heart');
+  ok(!(await p.$eval('#mpo', d => d.open)) && !(await p.evaluate(() => (st.family.loved['Idli'] || []).includes('2'))), 'with "View as: Ravi", tapping his own marked heart toggles just him off directly — no dialog');
+  ok(await p.evaluate(() => (st.family.loved['Idli'] || []).length === 2) && await p.$eval('li[data-c="0|breakfast|0"] .heart', e => e.classList.contains('on')), 'Asha and Meera stay marked, so the ♥ is still "on"');
+  await p.click('li[data-c="0|breakfast|0"] .heart');
+  ok(await p.evaluate(() => (st.family.loved['Idli'] || []).includes('2')) && !(await p.$eval('#mpo', d => d.open)), 'tapping again while viewing as Ravi marks him straight back on, still no dialog');
+  await p.selectOption('#viewas', ''); // back to Everyone view; marked for all three, so the heart stays visible without marking mode
+  await p.click('li[data-c="0|breakfast|0"] .heart'); // everyone is already marked, so "View as: Everyone" unmarks everyone at once — still no popup
+  ok(await p.evaluate(() => !('Idli' in st.family.loved)), 'tapping it again as "Everyone" clears it back out for the whole family');
+  ok(!(await p.$eval('li[data-c="0|breakfast|0"] .heart', e => e.classList.contains('on'))), 'the ♥ goes back to unmarked');
+
+  console.log('\n"Try new dishes" looks for real, popular YouTube recipes matching the box\'s own topic');
+  global.ytSearchQueries = [];
+  await p.click('#tbody .mopt[data-mo="2|nightDrink"]'); await p.selectOption('#ml-nov', 'new'); await p.fill('#ml-sug', 'millet based');
+  { const before = prompts.length; await p.click('#ml-fill'); await p.waitForFunction(() => !NL.pending, null, { timeout: 30000 });
+    ok(global.ytSearchQueries.some(q => /millet/i.test(q) && /night drink/i.test(q)), 'searches YouTube using the box\'s own topic word, not just the meal name');
+    const sent = prompts.slice(before).filter(x => /You plan home meals/.test(x));
+    ok(sent.some(x => /YouTube idea\(s\) found for this meal.*Millet Veggie Medley Bowl/.test(x)), 'Gemini is handed the real dish names found on YouTube for that meal, to prefer over recalling one from memory');
+    ok(sent.every(x => !x.includes('YouTube idea(s) found for this meal, already real and already popular — prefer these exact names if they fit: Idli')), 'a video whose dish is already in the master list (Idli) isn\'t offered as a "missing" idea'); }
+  ok(await p.evaluate(() => st.weeks[st.idx].days[2].nightDrink.includes('Millet Veggie Medley Bowl')), 'the YouTube-sourced dish Gemini picked is placed in the meal');
+  ok(await p.evaluate(() => st.custom['Millet Veggie Medley Bowl'].link === 'https://www.youtube.com/watch?v=ns1'), 'its video is attached, so the ▶ play icon works right away');
+  await p.evaluate(() => { const w = st.weeks[st.idx]; w.days[2].nightDrink = []; const m = w.meta.meals['2|nightDrink']; m.novelty = ''; m.suggest = ''; save(); render(); });
 
   // phone smoke
   const m = await (await b.newContext({ viewport: { width: 390, height: 844 } })).newPage(); const me = []; m.on('pageerror', e => me.push(e.message));

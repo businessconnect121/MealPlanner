@@ -6075,7 +6075,7 @@ function cookSpeak(text, onDone) {
     }, 7000);
   };
   if (P) { P.speaking = true; cookRenderStep(); }
-  next();
+  setTimeout(next, 0);   // a tick after cancel(), not the same tick: Chrome silently drops speak() called synchronously right after cancel()
 }
 
 const cookChefOn = P => !!(P && P.chef && !cookPrefs().muted && cookTTSOk());
@@ -6206,7 +6206,7 @@ function cookListenTick() {
     if (L.iv) { clearInterval(L.iv); L.iv = null; }
     cookRenderListen(); return;
   }
-  const shouldRun = inView;   // mic stays on while the Chef talks so "Chef…" can interrupt
+  const shouldRun = inView && !(L.testHold && now < L.testHold);   // mic stays on while the Chef talks so "Chef…" can interrupt — except mid "Test" voice (see liveVoiceTest)
   if (shouldRun && !L.running && !L.starting && now >= L.nextStartAt) cookStartRec();
   if (!shouldRun && (L.running || L.starting) && L.rec) { try { L.rec.abort(); } catch {} }
   cookRenderListen();
@@ -6225,22 +6225,10 @@ function cookStartRec() {
   rec.onresult = e => { if (L.rec === rec) cookOnRecResult(e); };
   rec.onerror = e => { if (L.rec === rec) cookOnRecError(e); };
   rec.onend = () => { if (L.rec !== rec) return; L.rec = null; L.running = false; L.starting = false; L.nextStartAt = Math.max(L.nextStartAt, Date.now() + 100); cookRenderListen(); if (L.want) setTimeout(cookListenTick, 130); };   // restart straight away: Chrome ends sessions every so often and speech in the gap is lost
-  const go = track => {
-    if (L.rec !== rec) return;
-    try {
-      if (track) { try { rec.start(track); return; } catch (e) { if (e && e.name === 'InvalidStateError') throw e; L.noTrack = true; cookAecRelease(); } }   // browser can't take a track: use the normal mic
-      rec.start();
-    } catch { L.starting = false; L.rec = null; L.nextStartAt = Date.now() + 1000; }
-  };
-  // Live mode: listen through an echo-cancelled mic track so the video's / Chef's own sound is filtered out
-  if (L.live && livePrefs().aec && !L.noTrack && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    if (L.aecTrack && L.aecTrack.readyState === 'live') { go(L.aecTrack); return; }
-    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false } })
-      .then(st => { L.aecStream = st; L.aecTrack = st.getAudioTracks()[0]; if (L.rec !== rec || !L.want) { cookAecRelease(); if (L.rec === rec) { L.starting = false; L.rec = null; } return; } go(L.aecTrack); })
-      .catch(() => { L.noTrack = true; go(null); });
-    return;
-  }
-  go(null);
+  // "Filter video sound" (an echo-cancelled getUserMedia track fed to the recognizer) was removed: holding that
+  // stream open made phones switch their audio session into call/communication routing, which changed the
+  // effective playback volume on its own. Always use the browser's normal mic input instead.
+  try { rec.start(); } catch { L.starting = false; L.rec = null; L.nextStartAt = Date.now() + 1000; }
 }
 function cookAecRelease() { const L = S.cookListen; try { if (L.aecStream) L.aecStream.getTracks().forEach(t => t.stop()); } catch {} L.aecStream = null; L.aecTrack = null; }
 function cookListenOff() {
@@ -6319,7 +6307,7 @@ function cookOnRecResult(e) {
       const nn = COOK_NORM(text), spoken = COOK_NORM(S.cookPlay ? (S.cookPlay.say || '') : S.cookPrevSay);
       const echo = nn.length > 2 && spoken.includes(nn.replace(COOK_WAKE_RE, '').trim() || nn);
       const tail = cookWakeAnywhere(nn, spoken) !== null;           // "chef" mixed into the transcript with the Chef's own words
-      const smDone = liveSmOn() && (LIVE_DONE_RE.test(nn) || LIVE_BACK_RE.test(nn) || LIVE_REPEAT_RE.test(nn)) && !new RegExp('\\b' + nn.replace(/[^a-z0-9' ]/g, '') + '\\b').test(spoken);   // step mode: "done" / "next" works while the Chef is still reading the action
+      const smDone = liveSmOn() && (LIVE_SM_INTERRUPT_RE.test(nn) || LIVE_BACK_RE.test(nn) || LIVE_REPEAT_RE.test(nn)) && !new RegExp('\\b' + nn.replace(/[^a-z0-9' ]/g, '') + '\\b').test(spoken);   // step mode: an unambiguous "done"/"next"/"back"/"repeat" works while the Chef is still reading the action — bare "ok"/"got it" fillers do not (see LIVE_SM_INTERRUPT_RE)
       if (!((COOK_WAKE_RE.test(nn) && !echo) || tail || smDone)) { if (r.isFinal) { L.handled = Math.max(L.handled, i); try { liveVadResume(); } catch {} } continue; }
       { const tl = cookWakeAnywhere(nn, spoken); if (tl !== null && !COOK_WAKE_RE.test(nn)) text = COOK_WAKE_WORDS[0] + ' ' + tl; }   // keep only what you said after "Chef"
       cookStopSpeech(); S.cookSayEnd = 0; S.cookInterruptAt = Date.now();   // an interruption is not an echo tail
@@ -7217,6 +7205,11 @@ const LIVE_ACT_PREFIX = COOK_CACHE_PREFIX + 'act8_';
 const LIVE_BACK_RE = /^(?:back|bag|bak|bach|go back|previous|previous one|last one|undo)$/;
 const LIVE_REPEAT_RE = /^(?:repeat|repeats|repeat that|again|say (?:that )?again|what was that|one more time|read it again)$/;
 const LIVE_DONE_RE = /^(?:ok(?:ay)? )?(?:done|dun|dunn|don|dawn|down|nex|finished|i'?m done|all done|next|next one|next please|next step|go on|got it|ok|okay|added|continue|i added it|did it)$/;
+/* Interrupting the Chef mid-sentence is a bigger commitment than answering "done" once it's already listening for it,
+   so only the unambiguous step words get to barge in. Bare acks like "ok"/"got it"/"continue" are left out here on
+   purpose: said while the Chef is (seemingly) talking, they're far more often a filler/hum than a real "next step",
+   and letting them through silently fired liveSmGo() and skipped steps nobody asked to skip. */
+const LIVE_SM_INTERRUPT_RE = /^(?:done|finished|i'?m done|all done|next|next one|next please|next step|skip)$/;
 const liveSmOn = () => !!(S.liveStage && S.liveStage.sm && S.liveStage.sm.on);
 
 /* typed text: commands first ("go to step 3", "go to where he adds onions"), otherwise a question for the AI */
@@ -7915,10 +7908,10 @@ function livePrefs() {
   if (p.v !== 3) { ['autoSummary','micOnOpen','micOnCook','handsFree','startMuted'].forEach(k => delete p[k]); }   // older choices came from earlier defaults
   return { wake: /^[a-z]{3,14}$/.test(p.wake || '') ? p.wake : LIVE_DEFAULT_WAKE, aliases: Array.isArray(p.aliases) ? p.aliases.filter(a => /^[a-z]{2,16}$/.test(a)).slice(0, 8) : [],
     recipeMuted: p.recipeMuted !== false, recipeMic: p.recipeMic === true,     // recipe page: Chef muted, mic off by default
-    cookMuted: p.cookMuted !== false, cookMic: p.cookMic === true, aec: p.aec !== false,             // cooking video: Chef muted, mic off by default
-    vad: false, handsFree: false };   // the "pause the Chef when I start talking" option was removed: interrupting needs the wake word
+    cookMuted: p.cookMuted !== false, cookMic: p.cookMic === true,             // cooking video: Chef muted, mic off by default
+    vad: false, handsFree: false };   // the "pause the Chef when I start talking" and "Filter video sound" options were removed: interrupting needs the wake word, and the mic always uses normal (non-echo-cancelled) input
 }
-function liveSavePrefs(p) { const o = { v: 3, wake: p.wake, aliases: p.aliases, recipeMuted: p.recipeMuted, recipeMic: p.recipeMic, cookMuted: p.cookMuted, cookMic: p.cookMic, aec: p.aec }; lsSet(LIVE_PREFS_KEY, o); }
+function liveSavePrefs(p) { const o = { v: 3, wake: p.wake, aliases: p.aliases, recipeMuted: p.recipeMuted, recipeMic: p.recipeMic, cookMuted: p.cookMuted, cookMic: p.cookMic }; lsSet(LIVE_PREFS_KEY, o); }
 function liveWakeWords(p) {
   p = p || livePrefs();
   return p.wake === LIVE_DEFAULT_WAKE ? [LIVE_DEFAULT_WAKE, ...LIVE_DEFAULT_ALIASES, ...p.aliases] : [p.wake, ...p.aliases];
@@ -7995,9 +7988,8 @@ function liveRenderSettings() {
       <label class="live-row">Microphone <select class="live-sel" id="live-rp-mic" onchange="liveOptChange()"><option value="0" ${!p.recipeMic ? 'selected' : ''}>Off</option><option value="1" ${p.recipeMic ? 'selected' : ''}>On</option></select></label></div>
     <div class="live-grp"><b>Cooking video</b>
       <label class="live-row">Chef <select class="live-sel" id="live-cv-mute" onchange="liveOptChange()"><option value="1" ${p.cookMuted ? 'selected' : ''}>Muted</option><option value="0" ${!p.cookMuted ? 'selected' : ''}>Unmuted</option></select></label>
-      <label class="live-row">Microphone <select class="live-sel" id="live-cv-mic" onchange="liveOptChange()"><option value="0" ${!p.cookMic ? 'selected' : ''}>Off</option><option value="1" ${p.cookMic ? 'selected' : ''}>On</option></select></label>
-      <label class="live-row">Filter video sound <select class="live-sel" id="live-aec" onchange="liveOptChange()"><option value="1" ${p.aec ? 'selected' : ''}>On</option><option value="0" ${!p.aec ? 'selected' : ''}>Off</option></select></label></div>
-    <p class="live-sheet-p"><small>The Chef and microphone options apply each time a recipe opens and each time you tap “Let's cook”. “Filter video sound” helps the mic ignore the video; if the Chef goes quiet on your phone while listening, set it to Off.</small></p>
+      <label class="live-row">Microphone <select class="live-sel" id="live-cv-mic" onchange="liveOptChange()"><option value="0" ${!p.cookMic ? 'selected' : ''}>Off</option><option value="1" ${p.cookMic ? 'selected' : ''}>On</option></select></label></div>
+    <p class="live-sheet-p"><small>The Chef and microphone options apply each time a recipe opens and each time you tap “Let's cook”.</small></p>
     <div class="cook-h">Your data (this device only)</div>
     <div class="cook-actions"><button class="btn btn-ghost btn-sm" id="live-clr-notes" onclick="liveClearData('notes')">Clear all notes</button>
       <button class="btn btn-ghost btn-sm" id="live-clr-rec" onclick="liveClearData('recipes')">Clear all recipes</button></div>
@@ -8022,17 +8014,24 @@ function liveVoiceChange(name) {
   liveFillVoices(); liveVoiceTest();
 }
 function liveVoiceTest() {
+  const L = S.cookListen;
+  // Releasing the aec track alone wasn't enough: the listen loop (cookListenTick, every 400ms) would just
+  // re-grab it and re-trigger the phone's mic-in-use audio mode before — or right in the middle of — the test
+  // utterance, which is why "Test" so often came out silent or clipped. Hold the recognizer off for the
+  // duration of the test line, and abort it right now instead of waiting up to 400ms for the next tick.
+  L.testHold = Date.now() + 6000;
+  if (L.rec) { try { L.rec.abort(); } catch {} }
   cookAecRelease();   // free the phone's mic-in-use audio mode so the voice can be heard
   try { speechSynthesis.cancel(); speechSynthesis.resume(); } catch {}
   const v = cookPickVoice(); const note = liveEl('live-voice-note');
   if (note) { const sm = note.querySelector('small'); if (sm) sm.textContent = 'Playing' + (v ? ' “' + v.name + '”' : '') + '… if silent, raise the phone’s media volume and check the tab isn’t muted.'; }
-  setTimeout(() => cookSpeak("Hi, I'm your Chef. This is how I sound."), 120);
+  setTimeout(() => cookSpeak("Hi, I'm your Chef. This is how I sound."), 150);
 }
 try { if (cookTTSOk()) speechSynthesis.addEventListener('voiceschanged', () => { const sh = document.getElementById('live-settings'); if (sh && !sh.hidden) liveFillVoices(); }); } catch {}
 function liveOptChange() {
   const p = livePrefs(), v = id => liveEl(id)?.value;
   p.recipeMuted = v('live-rp-mute') !== '0'; p.recipeMic = v('live-rp-mic') === '1';
-  p.cookMuted = v('live-cv-mute') !== '0'; p.cookMic = v('live-cv-mic') === '1'; if (liveEl('live-aec')) p.aec = v('live-aec') !== '0'; 
+  p.cookMuted = v('live-cv-mute') !== '0'; p.cookMic = v('live-cv-mic') === '1';
   liveSavePrefs(p);
 }
 function liveClearData(what) {
@@ -8063,6 +8062,7 @@ function liveTestStop(cancel) {
   const rec = S.liveTestRec; S.liveTestRec = null;
   if (rec) { rec.onend = null; rec.onresult = null; rec.onerror = null; try { rec.abort(); } catch {} }
   // (the old 3x wake-word test has been removed)
+  S.cookListen.testHold = 0;   // closing Settings mid-test: let the recognizer come straight back instead of waiting out the hold
   if (S.liveTestRestore) { S.liveTestRestore = false; if (S.liveActive) liveListenOn(); }
 }
 function liveWakeSave() {
