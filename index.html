@@ -7307,18 +7307,25 @@ function liveSmSyncBtns() {
   if (b) { b.textContent = on ? '👨‍🍳 Step mode: on' : '👨‍🍳 Step mode'; b.setAttribute('aria-pressed', on ? 'true' : 'false'); }
 }
 /* "Show me": hide the card so the whole video is visible, bring it back at the next action's moment, after 20 s, on pause or on a tap */
-function liveSmReveal() {
+function liveSmReveal(keepClip) {
   const st = S.liveStage, sm = st && st.sm; if (!sm || !sm.on) return;
-  sm.clip = null; sm.byPlay = false; sm.shownAt = Date.now(); try { if (liveVideoPlaying()) st.player.pauseVideo(); } catch {}
+  if (!keepClip) sm.clip = null;   // natural end-of-clip: the boundary is done with, a press now replays from the start (liveSmShowVideo re-arms a fresh one)
+  sm.byPlay = false; sm.shownAt = Date.now(); try { if (liveVideoPlaying()) st.player.pauseVideo(); } catch {}
   if (sm.hidden) { sm.hidden = false; liveSmRender(); }
 }
 function liveSmWatch(t) {   // called from liveTick
   const st = S.liveStage, sm = st && st.sm; if (!sm || !sm.on || !sm.clip) return;
   let x = -1; try { x = st.player.getPlayerState(); } catch {}
   const c = sm.clip;
-  if (x === 1) c.played = true;
+  if (x === 1) { c.played = true; c.revealed = false; }   // actually playing again — re-arm the manual-pause detector below for next time
   if (t >= c.end) { sm.justEnded = true; liveSmReveal(); }            // end of this action's part: stop here, and a single AirPod/media-key press now replays it
-  else if (x === 2 && c.played && Date.now() - c.at > 1500) { sm.clip = null; if (sm.hidden) liveSmReveal(); }   // it was playing and you paused it yourself (a slow start is not a pause) — not a natural end, so no auto-replay-on-press
+  // it was playing and something paused it that wasn't us reaching the end — your own pause, OR a misrouted
+  // AirPod/media-key press that iOS never delivers as a real nexttrack/previoustrack and instead fires as a
+  // quick pause-then-play (a slow start is not a pause). Reveal the card, but keep c.end armed: whatever
+  // resumes playback next — voice, the card, a stray media-key press — must still stop at this same point
+  // rather than running on unwatched through every later step (that was the bug: clearing the boundary here
+  // left nothing checking once play resumed).
+  else if (x === 2 && c.played && !c.revealed && Date.now() - c.at > 1500) { c.revealed = true; if (sm.hidden) liveSmReveal(true); }
 }
 async function liveSmStart() {
   const st = S.liveStage, d = S.live && S.live.data; if (!st || !st.ready || !d) return;
@@ -7577,10 +7584,13 @@ function liveMediaSyncState() {
 }
 function liveMediaTogglePlay() {
   const st = S.liveStage; if (!st || !st.ready) return;
-  // In step mode, a single press right after this action's own clip has played through to its own end
-  // replays it (seeking back to its start), instead of just resuming the main video from wherever the
-  // clip's end left it. Any other time (mid-clip, or an early pause before the end) it's a plain toggle.
-  if (liveSmOn() && st.sm.justEnded) { st.sm.justEnded = false; liveSmShowVideo(); liveMediaSyncState(); return; }
+  // In step mode, a single press whenever there's no clip currently armed for the current action — right
+  // after entering/arriving at it (before the auto-play has had a chance to kick in) or right after this
+  // action's own clip played through to its own end — (re)starts THIS action's own clip properly: seeks to
+  // its start and arms its boundary, instead of just toggling play from whatever stale position the player
+  // happens to be sitting at. Any other time (mid-clip, or an early pause before the end, where the clip is
+  // still armed) it's a plain play/pause toggle.
+  if (liveSmOn() && !st.sm.clip) { st.sm.justEnded = false; liveSmShowVideo(); liveMediaSyncState(); return; }
   try { if (liveVideoPlaying()) st.player.pauseVideo(); else st.player.playVideo(); } catch {}
   liveMediaSyncState();
 }
