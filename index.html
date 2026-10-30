@@ -7434,10 +7434,26 @@ function liveSmParts(a) {
 }
 const cookFmtDur = s => s >= 120 ? Math.round(s / 60) + ' minutes' : s >= 60 ? 'a minute' + (s > 60 ? ' ' + (s - 60) + ' seconds' : '') : s + ' seconds';
 
+/* Seek (paused) to action a's own start — same moment liveSmShowVideo() would play from — without
+   actually playing. Called the instant an action is shown so the player is never left sitting at some
+   other action's leftover position while paused. */
+function liveSmPark(a) {
+  const st = S.liveStage; if (!st || !st.ready || !a) return;
+  let t0 = a.time;
+  if (t0 == null) { const stp = S.live.data.steps[a.step - 1]; if (stp && stp.start != null) t0 = stp.start; }
+  if (t0 == null) return;   // no known moment for this action at all — nothing to park to
+  try { st.player.pauseVideo(); st.player.seekTo(Math.max(0, t0 - COOK_LEAD_IN), true); } catch {}
+  st.t = Math.max(0, t0 - COOK_LEAD_IN);
+}
 function liveSmShow(again) {
   const st = S.liveStage, sm = st && st.sm; if (!sm || !sm.on || !sm.acts) return;
   const a = sm.acts[sm.i]; if (!a) return;
   clearInterval(sm.tm); sm.tm = null; sm.tEnd = 0; sm.shownAt = Date.now(); sm.justEnded = false;
+  liveSmPark(a);   // seek (paused) to THIS action's own start the instant it's shown — not left wherever
+                    // the previous action's clip happened to stop. A single AirPod press can't be
+                    // intercepted on some devices and just does a native play/pause toggle on whatever
+                    // position the player is actually sitting at, so that position always has to be the
+                    // right one, not a leftover from before.
   liveSmRender();
   const parts = liveSmParts(a);
   const my0 = sm.i;
